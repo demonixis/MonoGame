@@ -16,10 +16,10 @@ partial class TitleContainer
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            Location = Path.Combine(AppContext.BaseDirectory, "..", "Resources");
+            Location = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Resources"));
             if (!Directory.Exists(Location))
             {
-                Location = Path.Combine(AppContext.BaseDirectory, "..", "..", "Resources");
+                Location = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "Resources"));
             }
         }
         if (string.IsNullOrEmpty(Location) || !Directory.Exists(Location))
@@ -30,10 +30,16 @@ partial class TitleContainer
 
     private static Stream PlatformOpenStream(string safeName)
     {
+        var absolutePath = Path.Combine(Location, safeName);
+        if (File.Exists(absolutePath))
+        {
+            return File.OpenRead(absolutePath);
+        }
+
         try
         {
-            var absolutePath = MGP.Platform_MakePath(Location, safeName);
-            return MG.OpenRead(absolutePath);
+            var nativePath = MGP.Platform_MakePath(Location, safeName);
+            return MG.OpenRead(nativePath);
         }
         catch
         {

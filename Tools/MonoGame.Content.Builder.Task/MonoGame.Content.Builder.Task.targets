@@ -98,8 +98,8 @@
   <Target Name="PrepareContentBuilder" DependsOnTargets="CollectContentReferences">
 
     <PropertyGroup>
-      <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'MacOSX'">$(MonoMacResourcePrefix)</PlatformResourcePrefix>
-      <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'iOS'">$(IPhoneResourcePrefix)</PlatformResourcePrefix>
+      <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'MacOSX' Or '$(MonoGamePlatform)' == 'MacOSMetal'">$(MonoMacResourcePrefix)</PlatformResourcePrefix>
+      <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'iOS' Or '$(MonoGamePlatform)' == 'iOSMetal'">$(IPhoneResourcePrefix)</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'Android'">$(MonoAndroidAssetsPrefix)</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(PlatformResourcePrefix)' != '' And !HasTrailingSlash('$(PlatformResourcePrefix)')">$(PlatformResourcePrefix)\</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(PlatformResourcePrefix)' == ''"></PlatformResourcePrefix>
@@ -195,7 +195,7 @@
 
     Outputs:
       - AndroidAsset: built content files if Android
-      - BundleResource: built content files if MacOSX or iOS
+      - BundleResource: built content files for macOS or iOS
       - Content: built content files for all other platforms
   -->
   <Target
@@ -211,8 +211,8 @@
       Include="%(ExtraContent.FullPath)"
       AdditionalMetadata="Link=$(PlatformResourcePrefix)%(ExtraContent.ContentDir)%(ExtraContent.RecursiveDir)%(ExtraContent.Filename)%(ExtraContent.Extension);CopyToOutputDirectory=PreserveNewest"
       Condition="'%(ExtraContent.Filename)' != ''">
-      <Output TaskParameter="Include" ItemName="Content" Condition="'$(MonoGamePlatform)' != 'Android' And '$(MonoGamePlatform)' != 'iOS' And '$(MonoGamePlatform)' != 'MacOSX'" />
-      <Output TaskParameter="Include" ItemName="BundleResource" Condition="'$(MonoGamePlatform)' == 'MacOSX' Or '$(MonoGamePlatform)' == 'iOS'" />
+      <Output TaskParameter="Include" ItemName="Content" Condition="'$(MonoGamePlatform)' != 'Android' And '$(MonoGamePlatform)' != 'iOS' And '$(MonoGamePlatform)' != 'iOSMetal' And '$(MonoGamePlatform)' != 'MacOSX' And '$(MonoGamePlatform)' != 'MacOSMetal'" />
+      <Output TaskParameter="Include" ItemName="BundleResource" Condition="'$(MonoGamePlatform)' == 'MacOSX' Or '$(MonoGamePlatform)' == 'MacOSMetal' Or '$(MonoGamePlatform)' == 'iOS' Or '$(MonoGamePlatform)' == 'iOSMetal'" />
       <Output TaskParameter="Include" ItemName="AndroidAsset" Condition="'$(MonoGamePlatform)' == 'Android'" />
     </CreateItem>
 
