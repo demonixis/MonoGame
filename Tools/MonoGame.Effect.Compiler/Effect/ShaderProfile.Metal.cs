@@ -18,7 +18,7 @@ namespace MonoGame.Effect
         private readonly string[] _converterTargets;
 
         public MetalShaderProfile()
-            : this("Metal", "--macos_version_min 15.0")
+            : this("Metal", "--deployment-os=macOS --minimum-os-build-version=15.0.0")
         {
         }
 
@@ -138,7 +138,7 @@ namespace MonoGame.Effect
     sealed class MetalMacOSShaderProfile : MetalShaderProfile
     {
         public MetalMacOSShaderProfile()
-            : base("MetalMacOS", "--macos_version_min 15.0")
+            : base("MetalMacOS", "--deployment-os=macOS --minimum-os-build-version=15.0.0")
         {
         }
     }
@@ -146,7 +146,10 @@ namespace MonoGame.Effect
     sealed class MetaliOSShaderProfile : MetalShaderProfile
     {
         public MetaliOSShaderProfile()
-            : base("MetaliOS", "--ios_version_min 18.0", "--ios_simulator_version_min 18.0")
+            : base(
+                "MetaliOS",
+                "--deployment-os=iOS --minimum-os-build-version=18.0.0",
+                "--deployment-os=iOSSimulator --minimum-os-build-version=18.0.0")
         {
         }
     }
