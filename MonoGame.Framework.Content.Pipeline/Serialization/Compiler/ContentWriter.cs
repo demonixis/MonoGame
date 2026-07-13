@@ -57,6 +57,8 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Serialization.Compiler
             'V', // DesktopVK (Vulkan)
             'G', // Windows GDK
             's', // Xbox Series
+            'A', // macOS Metal
+            'I', // iOS Metal
         };
 
         /// <summary>

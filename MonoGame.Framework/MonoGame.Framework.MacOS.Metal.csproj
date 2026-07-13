@@ -1,0 +1,61 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-macos</TargetFramework>
+    <TargetPlatformVersion>26.2</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <LangVersion>12.0</LangVersion>
+    <DefineConstants>XNADESIGNPROVIDED;NATIVE;METAL;MACOS;NETSTANDARD;STBSHARP_INTERNAL</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>The MonoGame runtime for macOS using native Metal and SDL2.</Description>
+    <PackageTags>monogame;.net;macos;metal;native</PackageTags>
+    <PackageId>MonoGame.Framework.MacOS.Metal</PackageId>
+    <AssemblyName>MonoGame.Framework</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>False</AppendTargetFrameworkToOutputPath>
+    <CopyContentFiles>True</CopyContentFiles>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>AnyCPU</Platforms>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageReadmeFile>README-packages.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README-packages.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin\**\*" />
+    <Compile Remove="obj\**\*" />
+    <Compile Remove="Platform\**\*" />
+    <Compile Remove="Properties\**\*" />
+    <Compile Remove="Utilities\System.Numerics.Vectors\**\*" />
+    <Compile Remove="Devices\**\*" />
+    <Compile Include="Platform\Native\**\*" />
+    <Compile Include="Platform\Utilities\ReflectionHelpers.Default.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Platform\**\*" />
+    <None Remove="Utilities\System.Numerics.Vectors\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ThirdParty\StbImageSharp\src\**\*.cs" LinkBase="Utilities\StbImageSharp" />
+    <Compile Include="..\ThirdParty\StbImageWriteSharp\src\**\*.cs" LinkBase="Utilities\StbImageWriteSharp" />
+    <Compile Include="Platform\Input\InputKeyEventArgs.cs" />
+    <Compile Include="Platform\Utilities\AssemblyHelper.cs" />
+    <Compile Include="Platform\Threading.cs" />
+    <Compile Include="Platform\Desktop\Devices\Sensors\Accelerometer.cs" />
+    <Compile Include="Platform\Desktop\Devices\Sensors\Compass.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(CopyContentFiles)' == 'True'">
+    <Content Include="MonoGame.Framework.MacOS.Metal.targets" PackagePath="build" />
+    <None Include="..\Artifacts\native\mgruntime\desktopmetal\macosx\Release\libmgruntime-metal.dylib"
+          Pack="true"
+          PackagePath="runtimes\osx\native\libmgruntime-metal.dylib"
+          Condition="Exists('..\Artifacts\native\mgruntime\desktopmetal\macosx\Release\libmgruntime-metal.dylib')" />
+  </ItemGroup>
+
+  <Import Project="MonoGame.Framework.Devices.Sensors.targets" />
+</Project>

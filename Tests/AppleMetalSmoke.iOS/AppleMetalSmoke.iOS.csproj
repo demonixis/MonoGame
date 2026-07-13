@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <TargetPlatformVersion>26.2</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>18.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">iossimulator-arm64</RuntimeIdentifier>
+    <ApplicationId>org.monogame.apple-metal-smoke-ios</ApplicationId>
+    <ApplicationTitle>Apple Metal Smoke</ApplicationTitle>
+    <AssemblyName>AppleMetalSmoke.iOS</AssemblyName>
+    <MonoGamePlatform>AppleMetalSmoke</MonoGamePlatform>
+    <DefineConstants>IOS</DefineConstants>
+    <Nullable>enable</Nullable>
+    <AppBundleExtraOptions>$(AppBundleExtraOptions) -gcc_flags '-framework CoreAudio -framework AudioToolbox'</AppBundleExtraOptions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../AppleMetalSmoke/AppleMetalSmokeGame.cs" Link="AppleMetalSmokeGame.cs" />
+    <ProjectReference Include="../../MonoGame.Framework/MonoGame.Framework.iOS.Metal.csproj" />
+    <NativeReference Include="../../Artifacts/native/mgruntime/iosmetal/Release/MGMetal.xcframework/ios-arm64/libmgruntime-metal.a"
+                     Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>Metal QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+    <NativeReference Include="../../Artifacts/native/mgruntime/iosmetal/Release/MGMetal.xcframework/ios-arm64_x86_64-simulator/libmgruntime-metal-simulator.a"
+                     Condition="'$(RuntimeIdentifier)' == 'iossimulator-arm64' or '$(RuntimeIdentifier)' == 'iossimulator-x64'">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>Metal QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+  </ItemGroup>
+
+</Project>

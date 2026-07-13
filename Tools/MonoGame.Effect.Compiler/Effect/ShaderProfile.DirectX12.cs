@@ -17,8 +17,22 @@ namespace MonoGame.Effect
     class DirectX12ShaderProfile : ShaderProfile
     {
         public DirectX12ShaderProfile()
-            : base("DirectX_12", 2)
+            : this("DirectX_12", 2)
         {
+        }
+
+        protected DirectX12ShaderProfile(string name, byte formatId)
+            : base(name, formatId)
+        {
+        }
+
+        protected virtual byte[] TransformBytecode(
+            byte[] dxil,
+            string shaderFunction,
+            bool isVertexShader,
+            ref string errorsAndWarnings)
+        {
+            return dxil;
         }
 
         internal override void AddMacros(Dictionary<string, string> macros)
@@ -111,6 +125,11 @@ namespace MonoGame.Effect
 
                 // Load up the compiled shader.
                 bytecode = File.ReadAllBytes(outputFile);
+                bytecode = TransformBytecode(
+                    bytecode,
+                    shaderFunction,
+                    isVertexShader,
+                    ref errorsAndWarnings);
             }
             finally
             {

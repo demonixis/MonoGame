@@ -5,7 +5,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using MonoGame.Framework.Utilities;
 using MonoGame.OpenAL;
-using MonoGame.OpenGL;
 
 #if ANDROID
 using System.Globalization;

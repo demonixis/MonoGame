@@ -2,6 +2,8 @@
 // This file is subject to the terms and conditions defined in
 // file 'LICENSE.txt', which is part of this source code package.
 
+using MonoGame.Interop;
+
 namespace Microsoft.Xna.Framework.Graphics;
 
 internal partial class GraphicsCapabilities
@@ -17,8 +19,17 @@ internal partial class GraphicsCapabilities
         SupportsTextureMaxLevel = true;
 
         // Texture compression
+#if METAL
+        var textureCompression = device.TextureCompressionCapabilities;
+        SupportsDxt1 = textureCompression.HasFlag(TextureCompressionCapabilities.S3tc);
+        SupportsS3tc = SupportsDxt1;
+        SupportsPvrtc = textureCompression.HasFlag(TextureCompressionCapabilities.Pvrtc);
+        SupportsEtc2 = textureCompression.HasFlag(TextureCompressionCapabilities.Etc2);
+        SupportsAstc = textureCompression.HasFlag(TextureCompressionCapabilities.Astc);
+#else
         SupportsDxt1 = true;
         SupportsS3tc = true;
+#endif
 
         SupportsSRgb = true;
 

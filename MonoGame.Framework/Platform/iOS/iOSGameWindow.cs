@@ -93,9 +93,13 @@ namespace Microsoft.Xna.Framework {
 
 		public override IntPtr Handle {
 			get {
+#if METAL
+                return _viewController.View.MetalLayer.Handle;
+#else
 				// TODO: Verify that View.Handle is a sensible
 				//       value to return here.
 				return _viewController.View.Handle;
+#endif
 			}
 		}
 

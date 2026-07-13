@@ -35,6 +35,12 @@ namespace MonoGame.Effect
 
         public static readonly ShaderProfile Vulkan = FromName("Vulkan");
 
+        public static readonly ShaderProfile Metal = FromName("Metal");
+
+        public static readonly ShaderProfile MetalMacOS = FromName("MetalMacOS");
+
+        public static readonly ShaderProfile MetaliOS = FromName("MetaliOS");
+
         /// <summary>
         /// Returns all the loaded shader profiles.
         /// </summary>
@@ -86,6 +92,8 @@ namespace MonoGame.Effect
             TargetPlatform.Windows => ShaderProfile.DirectX_11,
             TargetPlatform.iOS or TargetPlatform.Android or TargetPlatform.DesktopGL or TargetPlatform.MacOSX or TargetPlatform.RaspberryPi or TargetPlatform.Web => ShaderProfile.OpenGL,
             TargetPlatform.DesktopVK => ShaderProfile.Vulkan,
+            TargetPlatform.MacOSMetal => ShaderProfile.MetalMacOS,
+            TargetPlatform.iOSMetal => ShaderProfile.MetaliOS,
             TargetPlatform.WindowsDX12 or TargetPlatform.XboxOne or TargetPlatform.XboxSeries => ShaderProfile.DirectX_12,
             _ => ShaderProfile.FromName(platform.ToString())
         };

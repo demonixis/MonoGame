@@ -52,6 +52,8 @@ namespace Microsoft.Xna.Framework.Content
             'V', // DesktopVK
             'G', // Windows GDK
             's', // Xbox Series
+            'A', // macOS Metal
+            'I', // iOS Metal
 
             // NOTE: There are additional identifiers for consoles that
             // are not defined in this repository.  Be sure to ask the

@@ -1,0 +1,127 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <TargetPlatformVersion>26.2</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>18.0</SupportedOSPlatformVersion>
+    <DefineConstants>IOS;METAL;NATIVE;STBSHARP_INTERNAL</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>The MonoGame runtime for iOS and iPadOS using native Metal.</Description>
+    <PackageTags>monogame;.net;ios;metal;native</PackageTags>
+    <PackageId>MonoGame.Framework.iOS.Metal</PackageId>
+    <AssemblyName>MonoGame.Framework</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>False</AppendTargetFrameworkToOutputPath>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageReadmeFile>README-packages.md</PackageReadmeFile>
+    <CheckEolWorkloads>false</CheckEolWorkloads>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README-packages.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin\**\*" />
+    <Compile Remove="obj\**\*" />
+    <Compile Remove="Platform\**\*" />
+    <Compile Remove="Properties\**\*" />
+    <Compile Remove="Utilities\System.Numerics.Vectors\**\*" />
+    <Compile Remove="Devices\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Platform\**\*" />
+    <None Remove="Utilities\System.Numerics.Vectors\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Platform\Native\MGHandleAttribute.cs" />
+    <Compile Include="Platform\Native\Platform.Interop.cs" />
+    <Compile Include="Platform\Native\Graphics.Interop.cs" />
+    <Compile Include="Platform\Native\Image.Interop.cs" />
+    <Compile Include="Platform\Native\NativeGraphicsSystem.cs" />
+    <Compile Include="Platform\Native\BlendState.Native.cs" />
+    <Compile Include="Platform\Native\ConstantBuffer.Native.cs" />
+    <Compile Include="Platform\Native\DepthStencilState.Native.cs" />
+    <Compile Include="Platform\Native\EffectResource.Native.cs" />
+    <Compile Include="Platform\Native\GraphicsAdapter.Native.cs" />
+    <Compile Include="Platform\Native\GraphicsCapabilities.Native.cs" />
+    <Compile Include="Platform\Native\GraphicsDebug.Native.cs" />
+    <Compile Include="Platform\Native\GraphicsDevice.Native.cs" />
+    <Compile Include="Platform\Native\IndexBuffer.Native.cs" />
+    <Compile Include="Platform\Native\OcclusionQuery.Native.cs" />
+    <Compile Include="Platform\Native\RasterizerState.Native.cs" />
+    <Compile Include="Platform\Native\RenderTarget2D.Native.cs" />
+    <Compile Include="Platform\Native\RenderTarget3D.Native.cs" />
+    <Compile Include="Platform\Native\RenderTargetCube.Native.cs" />
+    <Compile Include="Platform\Native\SamplerState.Native.cs" />
+    <Compile Include="Platform\Native\SamplerStateCollection.Native.cs" />
+    <Compile Include="Platform\Native\Shader.Native.cs" />
+    <Compile Include="Platform\Native\Texture.Native.cs" />
+    <Compile Include="Platform\Native\Texture2D.Native.cs" />
+    <Compile Include="Platform\Native\Texture3D.Native.cs" />
+    <Compile Include="Platform\Native\TextureCollection.Native.cs" />
+    <Compile Include="Platform\Native\TextureCube.Native.cs" />
+    <Compile Include="Platform\Native\VertexBuffer.Native.cs" />
+    <Compile Include="Platform\Native\VertexElement.Native.cs" />
+    <Compile Include="Platform\Native\VertexInputLayout.Native.cs" />
+
+    <Compile Include="Platform\iOS\Devices\Sensors\Accelerometer.cs" />
+    <Compile Include="Platform\iOS\Devices\Sensors\Compass.cs" />
+    <Compile Include="Platform\iOS\iOSGamePlatform.cs" />
+    <Compile Include="Platform\iOS\iOSGameView.Metal.cs" />
+    <Compile Include="Platform\iOS\iOSGameViewController.cs" />
+    <Compile Include="Platform\iOS\iOSGameView_Touch.cs" />
+    <Compile Include="Platform\iOS\iOSGameWindow.cs" />
+    <Compile Include="Platform\iOS\OrientationConverter.cs" />
+    <Compile Include="Platform\iOS\PlatformInfo.iOSMetal.cs" />
+
+    <Compile Include="Platform\Audio\Xact\WaveBank.Default.cs" />
+    <Compile Include="Platform\GamePlatform.Mobile.cs" />
+    <Compile Include="Platform\Input\InputKeyEventArgs.cs" />
+    <Compile Include="Platform\Input\GamePad.iOS.cs" />
+    <Compile Include="Platform\Input\Joystick.Default.cs" />
+    <Compile Include="Platform\Input\Keyboard.Default.cs" />
+    <Compile Include="Platform\Input\KeyboardInput.iOS.cs" />
+    <Compile Include="Platform\Input\MessageBox.iOS.cs" />
+    <Compile Include="Platform\Input\Mouse.Default.cs" />
+    <Compile Include="Platform\Input\MouseCursor.Default.cs" />
+    <Compile Include="Platform\Media\MediaPlayer.Default.cs" />
+    <Compile Include="Platform\TitleContainer.MacOS.cs" />
+    <Compile Include="Platform\Utilities\AssemblyHelper.cs" />
+    <Compile Include="Platform\Utilities\InteropHelpers.cs" />
+    <Compile Include="Platform\Utilities\ReflectionHelpers.Default.cs" />
+    <Compile Include="Platform\Threading.cs" />
+
+    <Compile Include="..\ThirdParty\StbImageSharp\src\**\*.cs" LinkBase="Utilities\StbImageSharp" />
+    <Compile Include="..\ThirdParty\StbImageWriteSharp\src\**\*.cs" LinkBase="Utilities\StbImageWriteSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="MonoGame.Framework.iOS.Metal.targets" PackagePath="build" />
+    <None Include="..\Artifacts\native\mgruntime\iosmetal\Release\MGMetal.xcframework\**\*"
+          Pack="true"
+          PackagePath="runtimes\ios\native\MGMetal.xcframework\%(RecursiveDir)%(Filename)%(Extension)"
+          Condition="Exists('..\Artifacts\native\mgruntime\iosmetal\Release\MGMetal.xcframework')" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <NativeReference Include="..\Artifacts\native\mgruntime\iosmetal\Release\MGMetal.xcframework\ios-arm64\libmgruntime-metal.a"
+                     Condition="'$(RuntimeIdentifier)' == 'ios-arm64' and Exists('..\Artifacts\native\mgruntime\iosmetal\Release\MGMetal.xcframework\ios-arm64\libmgruntime-metal.a')">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>Metal QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+    <NativeReference Include="..\Artifacts\native\mgruntime\iosmetal\Release\MGMetal.xcframework\ios-arm64_x86_64-simulator\libmgruntime-metal-simulator.a"
+                     Condition="('$(RuntimeIdentifier)' == 'iossimulator-arm64' or '$(RuntimeIdentifier)' == 'iossimulator-x64') and Exists('..\Artifacts\native\mgruntime\iosmetal\Release\MGMetal.xcframework\ios-arm64_x86_64-simulator\libmgruntime-metal-simulator.a')">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>Metal QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+  </ItemGroup>
+
+  <Import Project="Platform\OpenAL.targets" />
+  <Import Project="MonoGame.Framework.Devices.Sensors.targets" />
+</Project>

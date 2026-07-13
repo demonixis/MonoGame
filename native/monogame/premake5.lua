@@ -4,10 +4,6 @@
 
 local vulkan_sdk = os.getenv("VULKAN_SDK")
 
-if vulkan_sdk == nil and os.target() == "macosx" then
-    error("Error: VULKAN_SDK environment variable is not set. Please set it to your Vulkan SDK installation path.")
-end
-
 newoption {
     trigger = "arch",
     value = "ARCH",
@@ -19,7 +15,20 @@ newoption {
     }
 }
 
-function common(project_name)
+newoption {
+    trigger = "backend",
+    value = "BACKEND",
+    description = "Generate one native graphics backend without requiring the others",
+    default = "all",
+    allowed = {
+        { "all", "All backends supported by the host" },
+        { "vulkan", "Vulkan only" },
+        { "metal", "Metal only" },
+        { "directx12", "DirectX 12 only" }
+    }
+}
+
+function common(project_name, target_name)
     if os.target() == "windows" then
         filter "platforms:x64"
         architecture "x86_64"
@@ -43,7 +52,7 @@ function common(project_name)
     filter {}
     defines {"DLL_EXPORT"}
     targetdir(platform_target_path)
-    targetname "mgruntime"
+    targetname(target_name or "mgruntime")
     cppdialect "C++17"
 
     files {"include/**.h", "common/**.h", "common/**.cpp"}
@@ -51,7 +60,8 @@ function common(project_name)
 end
 
 -- SDL is supported on all desktop platforms.
-function sdl2()
+function sdl2(force_load, library_dir)
+    library_dir = library_dir or "external/sdl2/sdl/build"
     defines {"MG_SDL2"}
 
     files {"sdl/**.h", "sdl/**.cpp"}
@@ -62,8 +72,12 @@ function sdl2()
     links {"external/sdl2/sdl/build/%{cfg.platform}/Release/SDL2-static.lib", "winmm", "imm32", "user32", "gdi32", "advapi32",
            "setupapi", "ole32", "oleaut32", "version", "shell32"}
     filter {"system:macosx"}
-    libdirs {"external/sdl2/sdl/build"}
-    linkoptions {"-Wl,-force_load,external/sdl2/sdl/build/libSDL2.a"}
+    libdirs {library_dir}
+    if force_load == false then
+        linkoptions {library_dir .. "/libSDL2.a"}
+    else
+        linkoptions {"-Wl,-force_load," .. library_dir .. "/libSDL2.a"}
+    end
     links {"SDL2"}
     links {"Cocoa.framework", "IOKit.framework", "ForceFeedback.framework", "CoreAudio.framework",
         "AudioToolbox.framework", "CoreGraphics.framework", "CoreFoundation.framework", "Metal.framework",
@@ -77,6 +91,10 @@ end
 
 -- Vulkan is supported for all desktop platforms.
 function vulkan()
+    if vulkan_sdk == nil then
+        error("Error: VULKAN_SDK environment variable is not set. Please set it to your Vulkan SDK installation path.")
+    end
+
     defines {"MG_VULKAN"}
 
     files {"vulkan/**.h", "vulkan/**.cpp"}
@@ -87,6 +105,25 @@ function vulkan()
     filter {"system:macosx"}
     libdirs {path.join(vulkan_sdk, "lib/MoltenVK.xcframework/macos-arm64_x86_64")}
     links {"MoltenVK", "IOSurface.framework", "Foundation.framework", "QuartzCore.framework", "AppKit.framework"}
+    filter {}
+end
+
+-- Metal is supported natively on Apple platforms and has no Vulkan dependency.
+function metal()
+    defines {"MG_METAL"}
+
+    files {"metal/**.h", "metal/**.cpp", "metal/**.mm"}
+
+    includedirs {"external/sdl2/sdl/include"}
+
+    filter {"system:macosx"}
+    buildoptions {"-fobjc-arc", "-mmacosx-version-min=15.0"}
+    linkoptions {
+        "-mmacosx-version-min=15.0",
+        "-Wl,-dead_strip",
+        "-Wl,-exported_symbols_list,metal/exports-macos.txt"
+    }
+    links {"Metal.framework", "QuartzCore.framework", "Foundation.framework", "AppKit.framework"}
     filter {}
 end
 
@@ -160,14 +197,27 @@ if os.target() == "windows" then
     platforms { "x64", "arm64" }
 end
 
-project "desktopvk"
-common("desktopvk")
-sdl2()
-vulkan()
-faudio()
-configs()
+local selected_backend = _OPTIONS["backend"] or "all"
 
-if os.target() == "windows" then
+if selected_backend == "all" or selected_backend == "vulkan" then
+    project "desktopvk"
+    common("desktopvk")
+    sdl2()
+    vulkan()
+    faudio()
+    configs()
+end
+
+if os.target() == "macosx" and (selected_backend == "all" or selected_backend == "metal") then
+    project "desktopmetal"
+    common("desktopmetal", "mgruntime-metal")
+    sdl2(false, "external/sdl2/sdl/build-metal")
+    metal()
+    faudio()
+    configs()
+end
+
+if os.target() == "windows" and (selected_backend == "all" or selected_backend == "directx12") then
     project "windowsdx"
     common("windowsdx")
     sdl2()

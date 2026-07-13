@@ -100,7 +100,17 @@ namespace Microsoft.Xna.Framework.Content.Pipeline
         /// <summary>
         /// Xbox Series S|X
         /// </summary>
-        XboxSeries
+        XboxSeries,
+
+        /// <summary>
+        /// Apple macOS devices using Metal.
+        /// </summary>
+        MacOSMetal,
+
+        /// <summary>
+        /// Apple iOS and iPadOS devices using Metal.
+        /// </summary>
+        iOSMetal
     }
 
 

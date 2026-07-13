@@ -75,6 +75,12 @@ enum class MGSurfaceFormat : mgint
     Astc12X12Rgba = 101,
 };
 
+enum class MGPresentationSurfaceKind : mgint
+{
+    SdlWindow = 0,
+    MetalLayer = 1,
+};
+
 enum class MGDepthFormat : mgint
 {
     None = 0,
@@ -521,6 +527,7 @@ enum class MGMonoGamePlatform : mgint
     PlayStation5 = 10,
     NintendoSwitch = 11,
     DesktopVK = 12,
+    MacOS = 13,
 };
 
 enum class MGGraphicsBackend : mgint
@@ -561,4 +568,3 @@ enum class MGGamePadType : mgint
     DrumKit = 8,
     BigButtonPad = 768,
 };
-

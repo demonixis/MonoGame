@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-macos</TargetFramework>
+    <TargetPlatformVersion>26.2</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">osx-arm64</RuntimeIdentifier>
+    <UseAppHost>true</UseAppHost>
+    <ApplicationId>org.monogame.apple-metal-smoke</ApplicationId>
+    <AssemblyName>AppleMetalSmoke</AssemblyName>
+    <MonoGamePlatform>AppleMetalSmoke</MonoGamePlatform>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../MonoGame.Framework/MonoGame.Framework.MacOS.Metal.csproj" />
+    <NativeReference Include="../../Artifacts/native/mgruntime/desktopmetal/macosx/Release/libmgruntime-metal.dylib"
+                     Condition="Exists('../../Artifacts/native/mgruntime/desktopmetal/macosx/Release/libmgruntime-metal.dylib')">
+      <Kind>Dynamic</Kind>
+      <SmartLink>false</SmartLink>
+    </NativeReference>
+  </ItemGroup>
+
+</Project>

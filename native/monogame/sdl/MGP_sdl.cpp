@@ -274,7 +274,9 @@ void MGP_Platform_BeforeInitialize(MGP_Platform* platform)
 
 MGMonoGamePlatform MGP_Platform_GetPlatform()
 {
-#if MG_VULKAN
+#if MG_METAL
+    return MGMonoGamePlatform::MacOS;
+#elif MG_VULKAN
     return MGMonoGamePlatform::DesktopVK;
 #elif MG_DIRECTX12
     return MGMonoGamePlatform::WindowsDX12;
@@ -286,7 +288,9 @@ MGMonoGamePlatform MGP_Platform_GetPlatform()
 
 MGGraphicsBackend MGP_Platform_GetGraphicsBackend()
 {
-#if MG_VULKAN
+#if MG_METAL
+    return MGGraphicsBackend::Metal;
+#elif MG_VULKAN
     return MGGraphicsBackend::Vulkan;
 #elif MG_DIRECTX12
     return MGGraphicsBackend::DirectX12;
@@ -731,7 +735,9 @@ MGP_Window* MGP_Window_Create(
 
 	Uint32 flags = SDL_WINDOW_HIDDEN;// | SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-#if defined(MG_VULKAN) || defined(MG_DIRECTX12)
+#if defined(MG_METAL)
+	flags |= SDL_WINDOW_METAL;
+#elif defined(MG_VULKAN) || defined(MG_DIRECTX12)
 	flags |= SDL_WINDOW_VULKAN;
 #else
 	#error Not implemented
@@ -1075,4 +1081,3 @@ mgbyte MGP_GamePad_SetVibration(MGP_Platform* platform, mgint identifer, mgfloat
     auto supported = SDL_GameControllerRumble(pair->second, (mgushort)(leftMotor * 0xFFFF), (mgushort)(rightMotor * 0xFFFF), INT_MAX);
     return supported == 0;
 }
-

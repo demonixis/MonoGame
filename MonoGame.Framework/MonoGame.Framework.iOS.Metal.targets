@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <MonoGamePlatform>iOSMetal</MonoGamePlatform>
+    <AppBundleExtraOptions>$(AppBundleExtraOptions) -gcc_flags '-framework CoreAudio -framework AudioToolbox -framework Metal -framework QuartzCore'</AppBundleExtraOptions>
+  </PropertyGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <NativeReference Include="$(MSBuildThisFileDirectory)..\runtimes\ios\native\MGMetal.xcframework\ios-arm64\libmgruntime-metal.a"
+                     Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>Metal QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+    <NativeReference Include="$(MSBuildThisFileDirectory)..\runtimes\ios\native\MGMetal.xcframework\ios-arm64_x86_64-simulator\libmgruntime-metal-simulator.a"
+                     Condition="'$(RuntimeIdentifier)' == 'iossimulator-arm64' or '$(RuntimeIdentifier)' == 'iossimulator-x64'">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>Metal QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+  </ItemGroup>
+</Project>

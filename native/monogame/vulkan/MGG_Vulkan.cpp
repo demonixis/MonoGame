@@ -1707,6 +1707,7 @@ void MGG_GraphicsDevice_Destroy(MGG_GraphicsDevice* device)
 void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_Caps& caps)
 {
 	assert(device != nullptr);
+	memset(&caps, 0, sizeof(caps));
 
 	// TODO: Get actual stats from the device!
 
@@ -1716,6 +1717,8 @@ void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_C
 
 	// Vulkan shader profile from pipeline.
 	caps.ShaderProfile = 80;
+	caps.MaxMultiSampleCount = 4;
+	caps.TextureCompression = 1; // S3TC/BC, preserving the existing native contract.
 }
 
 void MGVK_RecreateSwapChain(
@@ -2125,7 +2128,7 @@ void MGVK_RecreateSwapChain(MGG_GraphicsDevice* device)
 
 void MGG_GraphicsDevice_ResizeSwapchain(
 	MGG_GraphicsDevice* device,
-	void* nativeWindowHandle,
+	MGG_PresentationSurface& surface,
 	mgint width,
 	mgint height,
 	MGSurfaceFormat color,
@@ -2134,6 +2137,7 @@ void MGG_GraphicsDevice_ResizeSwapchain(
 	mgint syncInterval)
 {
 	assert(device);
+	assert(surface.Kind == MGPresentationSurfaceKind::SdlWindow);
 
 	// There is no zero... always at least 1.
 	if (multiSampleCount == 0)
@@ -2150,7 +2154,7 @@ void MGG_GraphicsDevice_ResizeSwapchain(
 	auto vkColor = ToVkFormat(color);
 	auto vkDepth = ToVkFormat(depth);
 	
-	MGVK_RecreateSwapChain(device, nativeWindowHandle, width, height, vkColor, vkDepth, multiSampleCount, syncInterval);
+	MGVK_RecreateSwapChain(device, surface.Handle, width, height, vkColor, vkDepth, multiSampleCount, syncInterval);
 
 	MGVK_PrepareFrame(device);
 }

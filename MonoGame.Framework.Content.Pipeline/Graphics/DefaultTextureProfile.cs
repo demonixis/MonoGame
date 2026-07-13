@@ -17,11 +17,13 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
                     platform == TargetPlatform.DesktopGL ||
                     platform == TargetPlatform.DesktopVK ||
                     platform == TargetPlatform.MacOSX ||
+                    platform == TargetPlatform.MacOSMetal ||
                     platform == TargetPlatform.NativeClient ||
                     platform == TargetPlatform.RaspberryPi ||
                     platform == TargetPlatform.Windows ||
                     platform == TargetPlatform.WindowsDX12 ||
                     platform == TargetPlatform.iOS ||
+                    platform == TargetPlatform.iOSMetal ||
                     platform == TargetPlatform.Web;
         }
 
@@ -50,6 +52,8 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
             {
                 if (platform == TargetPlatform.iOS)
                     format = TextureProcessorOutputFormat.PvrCompressed;
+                else if (platform == TargetPlatform.iOSMetal)
+                    format = TextureProcessorOutputFormat.AstcCompressed;
                 else if (platform == TargetPlatform.Android)
                     format = TextureProcessorOutputFormat.EtcCompressed;
                 else
@@ -64,11 +68,21 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
                     if (format != TextureProcessorOutputFormat.PvrCompressed)
                         throw new PlatformNotSupportedException("iOS platform only supports PVR texture compression");
                 }
+                else if (platform == TargetPlatform.iOSMetal)
+                {
+                    if (format != TextureProcessorOutputFormat.AstcCompressed &&
+                        format != TextureProcessorOutputFormat.EtcCompressed)
+                    {
+                        throw new PlatformNotSupportedException(
+                            "iOS Metal supports ASTC and ETC2 texture compression");
+                    }
+                }
                 else if (   platform == TargetPlatform.Windows ||
                             platform == TargetPlatform.WindowsDX12 ||
                             platform == TargetPlatform.DesktopGL ||
                             platform == TargetPlatform.DesktopVK ||
                             platform == TargetPlatform.MacOSX ||
+                            platform == TargetPlatform.MacOSMetal ||
                             platform == TargetPlatform.NativeClient ||
                             platform == TargetPlatform.Web)
                 {

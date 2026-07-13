@@ -62,6 +62,18 @@ internal struct MGG_GraphicsDevice_Caps
     public int MaxVertexTextureSlots;
     public int MaxVertexBufferSlots;
     public int ShaderProfile;
+    public int MaxMultiSampleCount;
+    public TextureCompressionCapabilities TextureCompression;
+}
+
+[Flags]
+internal enum TextureCompressionCapabilities
+{
+    None = 0,
+    S3tc = 1 << 0,
+    Etc2 = 1 << 1,
+    Astc = 1 << 2,
+    Pvrtc = 1 << 3,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -144,6 +156,37 @@ internal enum BufferType
     Constant,
 }
 
+internal enum PresentationSurfaceKind
+{
+    SdlWindow,
+    MetalLayer,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct MGG_PresentationSurface
+{
+    public PresentationSurfaceKind Kind;
+    public nint Handle;
+
+    public static MGG_PresentationSurface FromWindowHandle(nint handle)
+    {
+        return new MGG_PresentationSurface
+        {
+            Kind = PresentationSurfaceKind.SdlWindow,
+            Handle = handle,
+        };
+    }
+
+    public static MGG_PresentationSurface FromMetalLayer(nint handle)
+    {
+        return new MGG_PresentationSurface
+        {
+            Kind = PresentationSurfaceKind.MetalLayer,
+            Handle = handle,
+        };
+    }
+}
+
 
 internal static unsafe partial class MGG
 {
@@ -189,7 +232,7 @@ internal static unsafe partial class MGG
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_ResizeSwapchain", ExactSpelling = true)]
     public static extern void GraphicsDevice_ResizeSwapchain(
         MGG_GraphicsDevice* device,
-        nint nativeWindowHandle,
+        ref MGG_PresentationSurface surface,
         int width,
         int height,
         SurfaceFormat color,

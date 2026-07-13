@@ -217,7 +217,13 @@ internal readonly struct MGP_Window { }
 
 internal static unsafe partial class MGP
 {
+#if IOS && METAL
+    public const string MonoGameNativeDLL = "__Internal";
+#elif METAL
+    public const string MonoGameNativeDLL = "mgruntime-metal";
+#else
     public const string MonoGameNativeDLL = "mgruntime";
+#endif
 
     #region Platform
 

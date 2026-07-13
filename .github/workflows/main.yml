@@ -203,6 +203,100 @@ jobs:
           ACTIONS_RUNTIME_TOKEN: ${{ env.ACTIONS_RUNTIME_TOKEN }}
           ACTIONS_RUNTIME_URL: "${{ env.ACTIONS_RUNTIME_URL }}"
 
+  apple-metal:
+    name: apple-metal-preview
+    runs-on: macos-26
+    env:
+      AppleDotnetVersion: 10.0.300
+      AppleWorkloadVersion: 10.0.300
+      AppleXCodeVersion: 26.3
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup .NET 10 Apple lane
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '${{ env.AppleDotnetVersion }}'
+
+      - name: Pin Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '${{ env.AppleXCodeVersion }}'
+
+      - name: Install Apple workloads
+        working-directory: scripts/apple-metal
+        run: dotnet workload install macos ios --version ${{ env.AppleWorkloadVersion }}
+
+      - name: Setup Premake5
+        uses: abel0b/setup-premake@v2.4
+        with:
+          version: "5.0.0-beta2"
+
+      - name: Build native dependencies
+        working-directory: scripts/apple-metal
+        run: dotnet run --project ../../build/Build.csproj -- --target="Build Native Dependencies"
+
+      - name: Generate Apple Metal stock effects
+        working-directory: scripts/apple-metal
+        run: ./build-stock-effects.sh
+
+      - name: Build universal macOS Metal runtime
+        working-directory: native/monogame
+        run: |
+          metal/build-sdl-macos.sh Release
+          premake5 --backend=metal gmake
+          make config=release
+
+      - name: Build iOS Metal XCFramework
+        run: native/monogame/metal/build-ios-xcframework.sh Release
+
+      - name: Audit native Apple Metal artifacts
+        run: |
+          dylib=Artifacts/native/mgruntime/desktopmetal/macosx/Release/libmgruntime-metal.dylib
+          lipo "$dylib" -verify_arch x86_64 arm64
+          if otool -L "$dylib" | grep -Eiq 'vulkan|moltenvk'; then exit 1; fi
+          if nm -gU "$dylib" | grep -Eiq 'vulkan|moltenvk'; then exit 1; fi
+          if strings "$dylib" | grep -Eiq 'libvulkan|moltenvk'; then exit 1; fi
+          lipo Artifacts/native/mgruntime/iosmetal/Release/MGMetal.xcframework/ios-arm64/libmgruntime-metal.a -verify_arch arm64
+          lipo Artifacts/native/mgruntime/iosmetal/Release/MGMetal.xcframework/ios-arm64_x86_64-simulator/libmgruntime-metal-simulator.a -verify_arch arm64 x86_64
+
+      - name: Build managed Apple Metal targets
+        working-directory: scripts/apple-metal
+        run: |
+          dotnet build ../../MonoGame.Framework/MonoGame.Framework.MacOS.Metal.csproj -c Release
+          dotnet build ../../MonoGame.Framework/MonoGame.Framework.iOS.Metal.csproj -c Release
+          dotnet build ../../Tools/MonoGame.Effect.Compiler/MonoGame.Effect.Compiler.csproj -c Release
+          dotnet test ../../Tools/MonoGame.Tools.Tests/MonoGame.Tools.Tests.csproj -c Release --filter FullyQualifiedName~AppleMetalProfileTests
+
+      - name: Run macOS Metal resource and presentation smoke test
+        working-directory: scripts/apple-metal
+        run: ./run-macos-smoke.sh Release osx-arm64
+
+      - name: Run iOS Metal simulator smoke test
+        working-directory: scripts/apple-metal
+        run: ./run-ios-simulator-smoke.sh Release iossimulator-arm64
+
+      - name: Pack Apple Metal previews
+        working-directory: scripts/apple-metal
+        run: |
+          dotnet pack ../../MonoGame.Framework/MonoGame.Framework.iOS.Metal.csproj -c Release --no-build
+          dotnet pack ../../MonoGame.Framework/MonoGame.Framework.MacOS.Metal.csproj -c Release
+
+      - name: Consume macOS Metal preview package
+        working-directory: scripts/apple-metal
+        run: |
+          if [[ "$(uname -m)" == "arm64" ]]; then rid=osx-arm64; else rid=osx-x64; fi
+          dotnet build ../../Tests/AppleMetalPackageSmoke/AppleMetalPackageSmoke.csproj -c Release -r "$rid"
+          package_smoke=$(find ../../Tests/Artifacts -type f -path "*/$rid/AppleMetalPackageSmoke.app/Contents/MacOS/AppleMetalPackageSmoke" -print -quit)
+          test -n "$package_smoke"
+          "$package_smoke"
+
   pack-native-runtime:
     name: PackNativeRuntime
     needs: [ build ]

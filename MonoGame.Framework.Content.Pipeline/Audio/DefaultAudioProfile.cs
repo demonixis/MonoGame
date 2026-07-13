@@ -18,11 +18,13 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Audio
                     platform == TargetPlatform.DesktopGL ||
                     platform == TargetPlatform.DesktopVK ||
                     platform == TargetPlatform.MacOSX ||
+                    platform == TargetPlatform.MacOSMetal ||
                     platform == TargetPlatform.NativeClient ||
                     platform == TargetPlatform.RaspberryPi ||
                     platform == TargetPlatform.Windows ||
                     platform == TargetPlatform.WindowsDX12 ||
                     platform == TargetPlatform.iOS ||
+                    platform == TargetPlatform.iOSMetal ||
                     platform == TargetPlatform.Web;
         }
 
@@ -32,7 +34,11 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Audio
             var targetFormat = ConversionFormat.Pcm;
             if (quality != ConversionQuality.Best || content.Format.Format == 2 || content.Format.Format == 17)
             {
-                if (platform == TargetPlatform.iOS || platform == TargetPlatform.MacOSX || platform == TargetPlatform.DesktopGL)
+                if (platform == TargetPlatform.iOS ||
+                    platform == TargetPlatform.iOSMetal ||
+                    platform == TargetPlatform.MacOSX ||
+                    platform == TargetPlatform.MacOSMetal ||
+                    platform == TargetPlatform.DesktopGL)
                     targetFormat = ConversionFormat.ImaAdpcm;
                 else
                     targetFormat = ConversionFormat.Adpcm;

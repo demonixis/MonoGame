@@ -86,6 +86,14 @@ struct MGG_GraphicsDevice_Caps
     mgint MaxVertexTextureSlots;
     mgint MaxVertexBufferSlots;
     mgint ShaderProfile;
+    mgint MaxMultiSampleCount;
+    mgint TextureCompression;
+};
+
+struct MGG_PresentationSurface
+{
+    MGPresentationSurfaceKind Kind;
+    void* Handle;
 };
 
 struct Vector4
@@ -246,4 +254,3 @@ struct MGP_ControllerCaps
     mgbool HasRightVibrationMotor;
     mgbool HasVoiceSupport;
 };
-

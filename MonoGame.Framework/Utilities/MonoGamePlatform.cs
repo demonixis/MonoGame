@@ -73,5 +73,10 @@ namespace MonoGame.Framework.Utilities
         /// Cross platform desktop using Vulkan.
         /// </summary>
         DesktopVK,
+
+        /// <summary>
+        /// Apple macOS platform using Metal.
+        /// </summary>
+        MacOS,
     }
 }

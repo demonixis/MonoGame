@@ -32,10 +32,17 @@ public partial class GraphicsDevice
         get; private set;
     }
 
+    internal TextureCompressionCapabilities TextureCompressionCapabilities
+    {
+        get; private set;
+    }
+
+    private int _maxMultiSampleCount;
+
     private unsafe void PlatformSetup()
     {
         // Creates the device, but no swap chain yet.
-        Handle = MGG.GraphicsDevice_Create(NativeGamePlatform.GraphicsSystem, Adapter.Handle);
+        Handle = MGG.GraphicsDevice_Create(NativeGraphicsSystem.Handle, Adapter.Handle);
 
         // Get the device caps.
         MGG_GraphicsDevice_Caps caps;
@@ -45,6 +52,8 @@ public partial class GraphicsDevice
         MaxVertexTextureSlots = caps.MaxVertexTextureSlots;
         _maxVertexBufferSlots = caps.MaxVertexBufferSlots;
         ShaderProfile = caps.ShaderProfile;
+        _maxMultiSampleCount = caps.MaxMultiSampleCount;
+        TextureCompressionCapabilities = caps.TextureCompression;
         UseHalfPixelOffset = false;
     }
 
@@ -53,9 +62,14 @@ public partial class GraphicsDevice
         PresentationParameters.MultiSampleCount =
                 GetClampedMultisampleCount(PresentationParameters.BackBufferFormat, PresentationParameters.MultiSampleCount);
 
+#if IOS && METAL
+        var surface = MGG_PresentationSurface.FromMetalLayer(PresentationParameters.DeviceWindowHandle);
+#else
+        var surface = MGG_PresentationSurface.FromWindowHandle(PresentationParameters.DeviceWindowHandle);
+#endif
         MGG.GraphicsDevice_ResizeSwapchain(
                 Handle,
-                PresentationParameters.DeviceWindowHandle,
+                ref surface,
                 PresentationParameters.BackBufferWidth,
                 PresentationParameters.BackBufferHeight,
                 PresentationParameters.BackBufferFormat,
@@ -70,7 +84,9 @@ public partial class GraphicsDevice
 
     internal int PlatformGetMaxMultiSampleCount(SurfaceFormat format)
     {
-        return 4;
+        // Older native runtimes predate this capability field. Preserve their
+        // established behavior while Metal reports the selected device value.
+        return _maxMultiSampleCount > 0 ? _maxMultiSampleCount : 4;
     }
 
     private unsafe void OnPresentationChanged()
@@ -87,9 +103,14 @@ public partial class GraphicsDevice
         }
 
         // Now resize the back buffer.
+#if IOS && METAL
+        var surface = MGG_PresentationSurface.FromMetalLayer(PresentationParameters.DeviceWindowHandle);
+#else
+        var surface = MGG_PresentationSurface.FromWindowHandle(PresentationParameters.DeviceWindowHandle);
+#endif
         MGG.GraphicsDevice_ResizeSwapchain(
             Handle,
-            PresentationParameters.DeviceWindowHandle,
+            ref surface,
             PresentationParameters.BackBufferWidth,
             PresentationParameters.BackBufferHeight,
             PresentationParameters.BackBufferFormat,
@@ -126,6 +147,12 @@ public partial class GraphicsDevice
 
         // Start the command buffer now.
         _currentFrame = MGG.GraphicsDevice_BeginFrame(Handle);
+
+        // Metal can temporarily have no drawable while the window is hidden,
+        // minimized, or moving between screens.  Keep the frame idle in that
+        // case; applying the default target would recurse into BeginFrame.
+        if (_currentFrame < 0)
+            return;
 
         // We must reapply all the state on a new command buffer.
         _scissorRectangleDirty = true;

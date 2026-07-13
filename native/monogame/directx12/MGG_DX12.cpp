@@ -553,6 +553,7 @@ void MGG_GraphicsDevice_Destroy(MGG_GraphicsDevice* device)
 void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_Caps& caps)
 {
 	assert(device != nullptr);
+	memset(&caps, 0, sizeof(caps));
 
 	// TODO: Get actual stats from the device!
 
@@ -566,6 +567,8 @@ void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_C
 #else
 	caps.ShaderProfile = 2;
 #endif
+	caps.MaxMultiSampleCount = 4;
+	caps.TextureCompression = 1; // S3TC/BC
 }
 
 void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
@@ -593,7 +596,7 @@ void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
 
 void MGG_GraphicsDevice_ResizeSwapchain(
 	MGG_GraphicsDevice* device,
-	void* nativeWindowHandle,
+	MGG_PresentationSurface& surface,
 	mgint width,
 	mgint height,
 	MGSurfaceFormat color,
@@ -604,7 +607,8 @@ void MGG_GraphicsDevice_ResizeSwapchain(
 #if !defined(_GAMING_XBOX)
 
 #if defined(MG_SDL2)
-	auto sdl_window = (SDL_Window*)nativeWindowHandle;
+	assert(surface.Kind == MGPresentationSurfaceKind::SdlWindow);
+	auto sdl_window = (SDL_Window*)surface.Handle;
 
 	SDL_SysWMinfo windowInfo;
 	SDL_VERSION(&windowInfo.version);

@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.IO;
 
 using Foundation;
-using OpenGLES;
 using UIKit;
 using CoreAnimation;
 using ObjCRuntime;
@@ -99,6 +98,9 @@ namespace Microsoft.Xna.Framework
 
         protected override void Dispose(bool disposing)
         {
+#if METAL
+            NativeGraphicsSystem.Shutdown();
+#endif
             base.Dispose(disposing);
             if (disposing)
             {

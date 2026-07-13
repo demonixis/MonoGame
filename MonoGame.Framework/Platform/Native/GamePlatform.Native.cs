@@ -21,8 +21,6 @@ class NativeGamePlatform : GamePlatform
 {
     internal unsafe MGP_Platform* Handle;
 
-    private static unsafe MGG_GraphicsSystem* _system;
-
     private NativeGameWindow _window;
 
     private readonly List<string> _dropList = new List<string>(64);
@@ -48,23 +46,6 @@ class NativeGamePlatform : GamePlatform
         MessageBox._window = _window._handle;
         GamePad.Handle = Handle;
         OnIsMouseVisibleChanged();
-    }
-
-    internal static unsafe MGG_GraphicsSystem* GraphicsSystem
-    {
-        get
-        {
-            if (_system == null)
-            {
-                _system = MGG.GraphicsSystem_Create();
-                if (_system == null)
-                {
-                    throw new NoSuitableGraphicsDeviceException("Failed to initialize graphics system!");
-                }
-            }
-
-            return _system;
-        }
     }
 
     public override GameRunBehavior DefaultRunBehavior { get; }
@@ -280,9 +261,9 @@ class NativeGamePlatform : GamePlatform
             Game.GraphicsDevice.Present();
     }
 
-    public override unsafe void StartRunLoop()
+    public override void StartRunLoop()
     {
-        MGP.Platform_StartRunLoop(Handle);
+        throw new NotSupportedException("The desktop platform does not support asynchronous run loops");
     }
 
     public override unsafe void BeforeInitialize()
@@ -351,11 +332,7 @@ class NativeGamePlatform : GamePlatform
             Window = null;
         }
         
-        if (_system != null)
-        {
-            MGG.GraphicsSystem_Destroy(_system);
-            _system = null;
-        }
+        NativeGraphicsSystem.Shutdown();
 
         if (Handle != null)
         {
