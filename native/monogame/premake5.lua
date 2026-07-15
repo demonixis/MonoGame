@@ -52,6 +52,7 @@ function common(project_name, target_name)
     filter {}
     defines {"DLL_EXPORT"}
     targetdir(platform_target_path)
+    objdir("obj/" .. project_name .. "/%{cfg.buildcfg}")
     targetname(target_name or "mgruntime")
     cppdialect "C++17"
 

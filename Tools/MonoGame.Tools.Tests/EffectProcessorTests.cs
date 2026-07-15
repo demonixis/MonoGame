@@ -3,6 +3,8 @@ using Microsoft.Xna.Framework.Content.Pipeline;
 using NUnit.Framework;
 using Microsoft.Xna.Framework.Content.Pipeline.Processors;
 using System.IO;
+using System.Globalization;
+using System.Threading;
 #if DIRECTX
 using System.Collections.Generic;
 using TwoMGFX;
@@ -113,6 +115,28 @@ namespace MonoGame.Tests.ContentPipeline
 #endif
             BuildEffect(effectFile, TargetPlatform.DesktopGL);
             BuildEffect(effectFile, TargetPlatform.DesktopVK);
+        }
+
+        [Test]
+        public void VulkanSpirvConstantsUseInvariantCulture()
+        {
+            var originalCulture = Thread.CurrentThread.CurrentCulture;
+            var originalUiCulture = Thread.CurrentThread.CurrentUICulture;
+
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+                Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+                Assert.DoesNotThrow(() => BuildEffect(
+                    Path.Combine(TestContext.CurrentContext.TestDirectory,
+                        "Assets/Effects/InvariantCultureConstant.fx"),
+                    TargetPlatform.DesktopVK));
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = originalCulture;
+                Thread.CurrentThread.CurrentUICulture = originalUiCulture;
+            }
         }
 
         private void BuildEffect(string effectFile, TargetPlatform targetPlatform, string defines = null)

@@ -486,10 +486,7 @@ namespace MonoGame.Effect
                             {
                                 usage = usage,
                                 index = indexOffset + locationIndex,
-                                
-                                // TODO: These are unused at runtime under the
-                                // new native backends, we will remove them soon.               
-                                location = 0,
+                                location = (int)input.Location + locationIndex,
                                 name = string.Empty,
                             };
 

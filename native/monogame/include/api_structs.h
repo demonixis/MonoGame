@@ -159,6 +159,7 @@ struct MGG_InputElement
 {
     MGVertexElementUsage SemanticUsage;
     mguint SemanticIndex;
+    mguint ShaderLocation;
     mguint VertexBufferSlot;
     MGVertexElementFormat Format;
     mguint AlignedByteOffset;

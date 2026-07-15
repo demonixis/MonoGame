@@ -164,7 +164,7 @@ namespace MonoGame.Effect
                     var a = new ShaderData.Attribute();
 
                     //var mask = match.Groups[3].Value;
-                    //var register = int.Parse(match.Groups[4].Value);
+                    var register = int.Parse(match.Groups[4].Value);
                     //var format = match.Groups[6].Value;
 
                     // Get the element index.
@@ -217,9 +217,10 @@ namespace MonoGame.Effect
                             break;
                     }
 
-                    // TODO: These are unused at runtime under the
-                    // new native backends, we will remove them soon.               
-                    a.location = 0;
+                    // Metal consumes the DXIL input register as its stage-in
+                    // attribute index.  Keep it even when optimization leaves
+                    // gaps in the input signature.
+                    a.location = register;
                     a.name = string.Empty;
 
                     attributes.Add(a);

@@ -2,6 +2,8 @@
 // This file is subject to the terms and conditions defined in
 // file 'LICENSE.txt', which is part of this source code package.
 
+using System.Globalization;
+
 namespace MonoGame.Effect.Compiler.Effect.Spirv
 {
     // https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpConstant
@@ -23,7 +25,7 @@ namespace MonoGame.Effect.Compiler.Effect.Spirv
                 return null;
             }
 
-            float value = float.Parse(parts[4]);
+            float value = float.Parse(parts[4], CultureInfo.InvariantCulture);
 
             return new SpirvConstant
             {

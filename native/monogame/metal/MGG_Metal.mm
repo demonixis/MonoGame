@@ -1690,13 +1690,21 @@ static MTLTextureDescriptor* MGMetalTextureDescriptor(id<MTLDevice> device, MGTe
     descriptor.height = std::max(height, 1);
     descriptor.depth = std::max(depth, 1);
     descriptor.mipmapLevelCount = std::max(mipmaps, 1);
-    descriptor.arrayLength = std::max(slices, 1);
     if (type == MGTextureType::_3D)
+    {
         descriptor.textureType = MTLTextureType3D;
+        descriptor.arrayLength = 1;
+    }
     else if (type == MGTextureType::Cube)
+    {
         descriptor.textureType = slices > 6 ? MTLTextureTypeCubeArray : MTLTextureTypeCube;
+        descriptor.arrayLength = std::max(slices / 6, 1);
+    }
     else
+    {
         descriptor.textureType = slices > 1 ? MTLTextureType2DArray : MTLTextureType2D;
+        descriptor.arrayLength = std::max(slices, 1);
+    }
     descriptor.storageMode = MGMetalCpuVisibleTextureStorageMode(device);
     descriptor.usage = MTLTextureUsageShaderRead;
     return descriptor;
@@ -1930,7 +1938,10 @@ static bool MGMetalParseShaderReflection(MGG_Shader* shader)
         }
     }
 
-    return shader->topLevelArgumentBufferSize > 0;
+    // Shaders without constants, textures, or samplers legitimately have an
+    // empty top-level argument buffer.  The converter still emits a valid
+    // reflection object for them and no resource offsets need to be encoded.
+    return true;
 }
 
 MGG_InputLayout* MGG_InputLayout_Create(MGG_GraphicsDevice* device, MGG_Shader* vertexShader, mgint* strides, mgint streamCount, MGG_InputElement* elements, mgint elementCount)
@@ -1968,7 +1979,7 @@ MGG_InputLayout* MGG_InputLayout_Create(MGG_GraphicsDevice* device, MGG_Shader* 
     for (int i = 0; i < elementCount; ++i)
     {
         const MGG_InputElement& element = elements[i];
-        const NSUInteger attributeIndex = MGMetalIRStageInAttributeStartIndex + i;
+        const NSUInteger attributeIndex = MGMetalIRStageInAttributeStartIndex + element.ShaderLocation;
         const NSUInteger metalBufferIndex = MGMetalIRStageInAttributeStartIndex + element.VertexBufferSlot;
         layout->descriptor.attributes[attributeIndex].format = MGMetalVertexFormat(element.Format);
         layout->descriptor.attributes[attributeIndex].offset = element.AlignedByteOffset;

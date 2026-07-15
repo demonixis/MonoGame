@@ -469,6 +469,7 @@ struct MGG_RasterizerState
 
 struct MGG_SamplerState
 {
+	FrameCounter frame = 0;
 	uint64_t id;
 	VkSampler sampler;
 	MGG_SamplerState_Info info;
@@ -2509,6 +2510,10 @@ static void MGVK_DestroyFrameResources(MGG_GraphicsDevice* device, FrameCounter 
 		while (device->destroySamplers.size() > 0)
 		{
 			auto sampler = device->destroySamplers.front();
+			auto diff = currentFrame - sampler->frame;
+			if (!free_all && diff < device->freeFrames)
+				break;
+
 			device->destroySamplers.pop();
 			vkDestroySampler(device->device, sampler->sampler, nullptr);
 			delete sampler;
@@ -3110,6 +3115,9 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 
 		// Mark the targets as being written to this frame.
 		target->writeFrame = currentFrame;
+		target->frame = currentFrame;
+		if (target->depthTexture != nullptr)
+			target->depthTexture->frame = currentFrame;
 
 		// Is the layout in the right state?
 		if (!target->isSwapchain && target->layouts[0] != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
@@ -3724,6 +3732,8 @@ static VkPipeline MGVK_CreatePipeline(MGG_GraphicsDevice* device)
 	pipeline.state = device->pipelineState;
 
 	VkResult res = vkCreateGraphicsPipelines(device->device, device->pipelineCache, 1, &pipelineInfo, nullptr, &pipeline.cache);
+	if (res != VK_SUCCESS)
+		fprintf(stderr, "Vulkan pipeline creation failed for vertex shader %u and pixel shader %u.\n", pstate.program->vertex->id, pstate.program->pixel->id);
 	VK_CHECK_RESULT(res);
 	VK_SET_OBJECT_NAME(device->device, pipeline.cache, VK_OBJECT_TYPE_PIPELINE, "MGVK_PipelineCache.cache (hash: %u)", hash);
 
@@ -3758,6 +3768,42 @@ static void MGVK_UpdatePipeline(MGG_GraphicsDevice* device, VkCommandBuffer comm
 		}
 
 		device->shaderDirty = false;
+	}
+
+	// Descriptor sets and buffer bindings can remain unchanged across draws.
+	// Refresh resource ages on every use so deferred destruction never treats
+	// a still-referenced object as stale merely because its binding was cached.
+	if (device->pipelineState.program != nullptr)
+	{
+		MGG_Shader* shaders[] =
+		{
+			device->pipelineState.program->vertex,
+			device->pipelineState.program->pixel
+		};
+		for (MGG_Shader* shader : shaders)
+		{
+			uint32_t slots = shader->textureSlots | shader->samplerSlots;
+			for (int slot = 0; slot < MAX_TEXTURE_SLOTS; ++slot)
+			{
+				const uint32_t mask = 1u << slot;
+				if ((slots & mask) == 0)
+					continue;
+
+				auto texture = device->textures[(mgint)shader->stage][slot];
+				if (texture != nullptr)
+					texture->frame = currentFrame;
+
+				auto sampler = device->samplers[(mgint)shader->stage][slot];
+				if (sampler != nullptr)
+					sampler->frame = currentFrame;
+			}
+		}
+	}
+
+	for (auto buffer : device->vertexBuffers)
+	{
+		if (buffer != nullptr)
+			buffer->frame = currentFrame;
 	}
 
 	// First update the pipeline if we need to.
@@ -3947,6 +3993,7 @@ void MGG_GraphicsDevice_DrawIndexed(MGG_GraphicsDevice* device, MGPrimitiveType 
 
 	auto indexBuffer = device->indexBuffer;
 	assert(indexBuffer != nullptr);
+	indexBuffer->frame = device->frame;
 
 	// TODO: Detect if we need to rebind the same index buffer?
 	vkCmdBindIndexBuffer(frame.commandBuffer, indexBuffer->buffer, 0, device->indexBufferSize == MGIndexElementSize::SixteenBits ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
@@ -3989,6 +4036,7 @@ void MGG_GraphicsDevice_DrawIndexedInstanced(
 
 	auto indexBuffer = device->indexBuffer;
 	assert(indexBuffer != nullptr);
+	indexBuffer->frame = device->frame;
 	vkCmdBindIndexBuffer(frame.commandBuffer, indexBuffer->buffer, 0, device->indexBufferSize == MGIndexElementSize::SixteenBits ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
 
 	auto indexCount = MGVK_GetIndexCount(primitiveType, primitiveCount);
@@ -5481,7 +5529,7 @@ MGG_InputLayout* MGG_InputLayout_Create(
 		const auto element = elements[i];
 		auto& attrib = layout->attributes[i];
 
-		attrib.location = i;
+		attrib.location = element.ShaderLocation;
 		attrib.binding = element.VertexBufferSlot;
 		attrib.format = ToVkFormat(element.Format);
 		attrib.offset = element.AlignedByteOffset;
@@ -5546,6 +5594,7 @@ MGG_Shader* MGG_Shader_Create(MGG_GraphicsDevice* device, MGShaderStage stage, m
 
 	shader->id = ++device->currentShaderId;
 	VK_SET_OBJECT_NAME(device->device, shader->module, VK_OBJECT_TYPE_SHADER_MODULE, "MGG_Shader.module (id: %u)", shader->id);
+
 
 	device->all_shaders.push_back(shader);
 
