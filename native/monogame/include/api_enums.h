@@ -79,6 +79,16 @@ enum class MGPresentationSurfaceKind : mgint
 {
     SdlWindow = 0,
     MetalLayer = 1,
+    AndroidNativeWindow = 2,
+};
+
+enum class MGTextureCompressionCapabilities : mgint
+{
+    None = 0,
+    S3tc = 1,
+    Etc2 = 2,
+    Astc = 4,
+    Pvrtc = 8,
 };
 
 enum class MGDepthFormat : mgint
@@ -100,7 +110,6 @@ enum class MGShaderStage : mgint
 {
     Vertex = 0,
     Pixel = 1,
-    Count = 2,
 };
 
 enum class MGIndexElementSize : mgint

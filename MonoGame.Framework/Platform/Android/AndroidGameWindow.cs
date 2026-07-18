@@ -8,7 +8,9 @@ using Android.Content.PM;
 using Android.OS;
 using Android.Views;
 using Microsoft.Xna.Framework.Input.Touch;
+#if GLES
 using MonoGame.OpenGL;
+#endif
 
 namespace Microsoft.Xna.Framework
 {
@@ -22,7 +24,7 @@ namespace Microsoft.Xna.Framework
         private DisplayOrientation _supportedOrientations = DisplayOrientation.Default;
         private DisplayOrientation _currentOrientation;
 
-        public override IntPtr Handle { get { return IntPtr.Zero; } }
+        public override IntPtr Handle { get { return GameView.NativeWindowHandle; } }
 
         public override Point Position
         {
@@ -75,7 +77,11 @@ namespace Microsoft.Xna.Framework
         {
             _clientBounds = new Rectangle(0, 0, size.X, size.Y);
             
+#if VULKAN
+            GameView = new MonoGameAndroidVulkanGameView(context, this, _game);
+#else
             GameView = new MonoGameAndroidGameView(context, this, _game);
+#endif
             GameView.RenderOnUIThread = Game.Activity.RenderOnUIThread;
             GameView.RenderFrame += OnRenderFrame;
             GameView.UpdateFrame += OnUpdateFrame;

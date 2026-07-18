@@ -53,9 +53,9 @@ namespace Microsoft.Xna.Framework
         bool androidSurfaceAvailable = false;
         bool needToForceRecreateSurface = false;
 
-        bool glSurfaceAvailable;
-        bool glContextAvailable;
-        bool lostglContext;
+        protected bool glSurfaceAvailable;
+        protected bool glContextAvailable;
+        protected bool lostglContext;
         System.Diagnostics.Stopwatch stopWatch;
         double tick = 0;
 
@@ -65,7 +65,9 @@ namespace Microsoft.Xna.Framework
         CancellationTokenSource cts = null;
         private readonly AndroidTouchEventManager _touchManager;
         private readonly AndroidGameWindow _gameWindow;
-        private readonly Game _game;
+        protected readonly Game _game;
+
+        internal virtual IntPtr NativeWindowHandle => IntPtr.Zero;
 
         // Events that are triggered on the game thread
         public static event EventHandler OnPauseGameThread;
@@ -135,6 +137,7 @@ namespace Microsoft.Xna.Framework
             lock (_lockObject)
             {
                 androidSurfaceAvailable = false;
+                needToForceRecreateSurface = true;
             }
         }
 
@@ -309,7 +312,17 @@ namespace Microsoft.Xna.Framework
                     _waitForExitedStateProcessed.Reset();
                 }
 
+                _waitForMainGameLoop.Set();
             }
+        }
+
+        internal void StopAndWait()
+        {
+            var waitForExit = !RenderOnUIThread && cts != null;
+            Stop();
+
+            if (waitForExit)
+                _waitForExitedStateProcessed.WaitOne();
         }
 
         FrameEventArgs renderEventArgs = new FrameEventArgs();
@@ -370,6 +383,8 @@ namespace Microsoft.Xna.Framework
                 {
                     _internalState = InternalState.Exited_GameThread;
                 }
+
+                _waitForExitedStateProcessed.Set();
             }
 
         }
@@ -752,7 +767,7 @@ namespace Microsoft.Xna.Framework
                 throw new ObjectDisposedException("");
         }
 
-        protected void DestroyGLContext()
+        protected virtual void DestroyGLContext()
         {
             if (eglContext != null)
             {
@@ -770,7 +785,7 @@ namespace Microsoft.Xna.Framework
             glContextAvailable = false;
         }
 
-        protected void DestroyGLSurface()
+        protected virtual void DestroyGLSurface()
         {
             if (!(eglSurface == null || eglSurface == IEGL10.EglNoSurface))
             {
@@ -879,7 +894,7 @@ namespace Microsoft.Xna.Framework
             }
         }
 
-        protected void CreateGLContext()
+        protected virtual void CreateGLContext()
         {
             lostglContext = false;
 
@@ -1037,7 +1052,7 @@ namespace Microsoft.Xna.Framework
             }
         }
 
-        protected void CreateGLSurface()
+        protected virtual void CreateGLSurface()
         {
             if (!glSurfaceAvailable)
             {

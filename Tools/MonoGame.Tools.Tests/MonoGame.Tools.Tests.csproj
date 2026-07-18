@@ -48,6 +48,9 @@
     <Content Include="../../MonoGame.Framework/Platform/Graphics/Effect/Resources/*.fxh" CopyToOutputDirectory="PreserveNewest">
       <Link>Assets/Effects/Stock/%(Filename)%(Extension)</Link>
     </Content>
+    <Content Include="../../MonoGame.Framework.Content.Pipeline/MonoGame.Content.Builder.targets" CopyToOutputDirectory="PreserveNewest">
+      <Link>Assets/MonoGame.Content.Builder.targets</Link>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

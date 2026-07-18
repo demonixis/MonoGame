@@ -590,7 +590,7 @@ namespace Microsoft.Xna.Framework.Graphics
         /// </exception>
 		public void SetValue (bool value)
 		{
-#if NATIVE
+#if NATIVE || NATIVE_GRAPHICS
             // DXC encodes bool parameters as uints, so to enable people to use the same type semantics as is declared in the shader,
             // we should allow parameters of that type here.
             if (ParameterClass != EffectParameterClass.Scalar || (ParameterType != EffectParameterType.Bool && ParameterType != EffectParameterType.Int32))

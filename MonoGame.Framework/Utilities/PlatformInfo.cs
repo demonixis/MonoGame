@@ -53,6 +53,8 @@ namespace MonoGame.Framework.Utilities
                 return GraphicsBackend.DirectX;
 #elif OPENGL
                 return GraphicsBackend.OpenGL;
+#elif VULKAN
+                return GraphicsBackend.Vulkan;
 #else
                 return PlatformGetGraphicsBackend();
 #endif

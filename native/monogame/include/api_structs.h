@@ -59,6 +59,21 @@ struct Emitter
     mgfloat DopplerScale;
 };
 
+struct MGM_AudioDecoderInfo
+{
+    mgint samplerate;
+    mgint channels;
+    mgulong duration;
+};
+
+struct MGM_VideoDecoderInfo
+{
+    mgint width;
+    mgint height;
+    mgfloat fps;
+    mgulong duration;
+};
+
 struct MGG_DisplayMode
 {
     MGSurfaceFormat format;
@@ -80,6 +95,12 @@ struct MGG_GraphicsAdaptor_Info
     MGG_DisplayMode CurrentDisplayMode;
 };
 
+struct MGG_PresentationSurface
+{
+    MGPresentationSurfaceKind Kind;
+    void* Handle;
+};
+
 struct MGG_GraphicsDevice_Caps
 {
     mgint MaxTextureSlots;
@@ -87,13 +108,7 @@ struct MGG_GraphicsDevice_Caps
     mgint MaxVertexBufferSlots;
     mgint ShaderProfile;
     mgint MaxMultiSampleCount;
-    mgint TextureCompression;
-};
-
-struct MGG_PresentationSurface
-{
-    MGPresentationSurfaceKind Kind;
-    void* Handle;
+    MGTextureCompressionCapabilities TextureCompression;
 };
 
 struct Vector4
@@ -164,21 +179,6 @@ struct MGG_InputElement
     MGVertexElementFormat Format;
     mguint AlignedByteOffset;
     mguint InstanceDataStepRate;
-};
-
-struct MGM_AudioDecoderInfo
-{
-    mgint samplerate;
-    mgint channels;
-    mgulong duration;
-};
-
-struct MGM_VideoDecoderInfo
-{
-    mgint width;
-    mgint height;
-    mgfloat fps;
-    mgulong duration;
 };
 
 struct MGP_KeyEvent

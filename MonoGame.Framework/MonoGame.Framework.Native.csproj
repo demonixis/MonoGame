@@ -15,13 +15,16 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <Import Project="MonoGame.Framework.Native.Graphics.targets" />
+
   <ItemGroup>
     <Compile Remove="bin\**\*" />
     <Compile Remove="obj\**\*" />
     <Compile Remove="Platform\**\*" />
     <Compile Remove="Properties\**\*" />
     <Compile Remove="Utilities\System.Numerics.Vectors\**\*" />
-    <Compile Include="Platform\Native\**\*" />
+    <Compile Include="Platform\Native\**\*" Exclude="@(MonoGameNativeGraphicsSource)" />
+    <Compile Include="@(MonoGameNativeGraphicsSource)" />
     <Compile Include="Platform\Utilities\ReflectionHelpers.Default.cs" />
     <Compile Remove="Devices\**\*" />
   </ItemGroup>

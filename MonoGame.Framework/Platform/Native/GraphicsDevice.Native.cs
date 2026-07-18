@@ -42,7 +42,17 @@ public partial class GraphicsDevice
     private unsafe void PlatformSetup()
     {
         // Creates the device, but no swap chain yet.
+#if ANDROID && VULKAN
+        var surface = MGG_PresentationSurface.FromAndroidNativeWindow(PresentationParameters.DeviceWindowHandle);
+        Handle = MGG.GraphicsDevice_CreateWithSurface(NativeGraphicsSystem.Handle, Adapter.Handle, ref surface);
+#else
         Handle = MGG.GraphicsDevice_Create(NativeGraphicsSystem.Handle, Adapter.Handle);
+#endif
+        if (Handle == null)
+        {
+            throw new NoSuitableGraphicsDeviceException(
+                "The selected device does not satisfy the Vulkan graphics, presentation, swapchain, and scalar block layout requirements.");
+        }
 
         // Get the device caps.
         MGG_GraphicsDevice_Caps caps;
@@ -62,7 +72,9 @@ public partial class GraphicsDevice
         PresentationParameters.MultiSampleCount =
                 GetClampedMultisampleCount(PresentationParameters.BackBufferFormat, PresentationParameters.MultiSampleCount);
 
-#if IOS && METAL
+#if ANDROID && VULKAN
+        var surface = MGG_PresentationSurface.FromAndroidNativeWindow(PresentationParameters.DeviceWindowHandle);
+#elif IOS && METAL
         var surface = MGG_PresentationSurface.FromMetalLayer(PresentationParameters.DeviceWindowHandle);
 #else
         var surface = MGG_PresentationSurface.FromWindowHandle(PresentationParameters.DeviceWindowHandle);
@@ -103,7 +115,9 @@ public partial class GraphicsDevice
         }
 
         // Now resize the back buffer.
-#if IOS && METAL
+#if ANDROID && VULKAN
+        var surface = MGG_PresentationSurface.FromAndroidNativeWindow(PresentationParameters.DeviceWindowHandle);
+#elif IOS && METAL
         var surface = MGG_PresentationSurface.FromMetalLayer(PresentationParameters.DeviceWindowHandle);
 #else
         var surface = MGG_PresentationSurface.FromWindowHandle(PresentationParameters.DeviceWindowHandle);
@@ -177,6 +191,24 @@ public partial class GraphicsDevice
             _viewport.MaxDepth);
 
         PlatformApplyDefaultRenderTarget();
+    }
+
+    internal unsafe void SuspendPresentation()
+    {
+        if (Handle == null)
+            return;
+
+        _currentFrame = -1;
+        MGG.GraphicsDevice_SuspendPresentation(Handle);
+    }
+
+    internal unsafe void ResumePresentation(IntPtr nativeWindow)
+    {
+        if (Handle == null || nativeWindow == IntPtr.Zero)
+            return;
+
+        PresentationParameters.DeviceWindowHandle = nativeWindow;
+        OnPresentationChanged();
     }
 
     private unsafe void PlatformClear(ClearOptions options, Vector4 color, float depth, int stencil)

@@ -255,6 +255,10 @@ namespace Microsoft.Xna.Framework
         {
         }
 
+        internal virtual void BeforeGraphicsDeviceDispose()
+        {
+        }
+
         #endregion Methods
 
         #region IDisposable implementation

@@ -13,6 +13,7 @@ public sealed class BuildShadersTask : FrostingTask<BuildContext> { }
 [IsDependentOn(typeof(BuildDesktopGLTask))]
 [IsDependentOn(typeof(BuildWindowsDXTask))]
 [IsDependentOn(typeof(BuildAndroidTask))]
+[IsDependentOn(typeof(BuildAndroidVulkanTask))]
 [IsDependentOn(typeof(BuildiOSTask))]
 [IsDependentOn(typeof(BuildContentPipelineTask))]
 public sealed class BuildFrameworksTask : FrostingTask<BuildContext> { }

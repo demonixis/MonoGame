@@ -15,6 +15,7 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Audio
         public override bool Supports(TargetPlatform platform)
         {
             return  platform == TargetPlatform.Android ||
+                    platform == TargetPlatform.AndroidVK ||
                     platform == TargetPlatform.DesktopGL ||
                     platform == TargetPlatform.DesktopVK ||
                     platform == TargetPlatform.MacOSX ||

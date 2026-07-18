@@ -47,7 +47,7 @@ namespace Microsoft.Xna.Framework.Graphics
             }
         }
 
-#if !NATIVE
+#if !NATIVE && !NATIVE_GRAPHICS
         private static byte[] PlatformGetBytecode(string name)
         {            
             var assembly = ReflectionHelpers.GetAssembly(typeof(EffectResource));

@@ -1104,10 +1104,12 @@ void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_C
             break;
         }
     }
+    mgint textureCompression = 0;
     if (device->device.supportsBCTextureCompression)
-        caps.TextureCompression |= MGMetalTextureCompressionS3tc;
+        textureCompression |= MGMetalTextureCompressionS3tc;
     if ([device->device supportsFamily:MTLGPUFamilyApple1])
-        caps.TextureCompression |= MGMetalTextureCompressionEtc2 | MGMetalTextureCompressionAstc;
+        textureCompression |= MGMetalTextureCompressionEtc2 | MGMetalTextureCompressionAstc;
+    caps.TextureCompression = static_cast<MGTextureCompressionCapabilities>(textureCompression);
 }
 
 void MGG_GraphicsDevice_ResizeSwapchain(

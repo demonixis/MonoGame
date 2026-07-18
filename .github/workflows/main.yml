@@ -203,6 +203,93 @@ jobs:
           ACTIONS_RUNTIME_TOKEN: ${{ env.ACTIONS_RUNTIME_TOKEN }}
           ACTIONS_RUNTIME_URL: "${{ env.ACTIONS_RUNTIME_URL }}"
 
+  android-vulkan:
+    name: android-vulkan-preview
+    runs-on: ubuntu-24.04
+    env:
+      AndroidVulkanDotnetVersion: 8.0.419
+      AndroidVulkanNdkVersion: 28.2.13676358
+      AndroidVulkanPackageVersion: 0.0.0-smoke
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Generate Android Vulkan global.json
+        run: |
+          echo '{ "sdk": { "version": "${{ env.AndroidVulkanDotnetVersion }}", "rollForward": "disable" } }' > global.json
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '${{ env.AndroidVulkanDotnetVersion }}'
+          global-json-file: './global.json'
+
+      - name: Setup Android dependencies
+        uses: monogame/monogame-actions/install-android-dependencies@v1
+
+      - name: Install Android workload and NDK
+        run: |
+          dotnet workload install android --version "${AndroidVulkanDotnetVersion}"
+          sdkmanager "ndk;${AndroidVulkanNdkVersion}"
+
+      - name: Generate Vulkan stock effects
+        run: dotnet run --project build/Build.csproj -- --target="Build Vulkan Shaders"
+
+      - name: Build Android Vulkan runtime
+        run: bash native/monogame/android-vulkan/build-android.sh Release
+
+      - name: Pack Android Vulkan framework
+        run: |
+          dotnet pack MonoGame.Framework/MonoGame.Framework.Android.Vulkan.csproj \
+            -c Release \
+            -o Artifacts/NuGet \
+            -p:Version="${AndroidVulkanPackageVersion}"
+
+      - name: Consume package in APK smoke
+        run: |
+          dotnet build Tests/AndroidVulkanPackageSmoke/AndroidVulkanPackageSmoke.csproj \
+            -c Release \
+            -p:MonoGameAndroidVulkanPackageVersion="${AndroidVulkanPackageVersion}"
+
+      - name: Audit runtime and APK
+        run: |
+          runtime=Artifacts/native/mgruntime/androidvk/android-arm64/Release/libmgruntime.so
+          readelf -h "$runtime"
+          readelf -d "$runtime" | tee Artifacts/android-vulkan-readelf-dynamic.txt
+          readelf -Ws "$runtime" | tee Artifacts/android-vulkan-readelf-symbols.txt
+          if grep -Eiq 'SDL|GLES|FAudio|MoltenVK|X11|wayland' Artifacts/android-vulkan-readelf-dynamic.txt; then
+            echo "Unexpected desktop or GLES dependency in libmgruntime.so" >&2
+            exit 1
+          fi
+          apk=$(find Tests/Artifacts -name '*packagesmoke*-Signed.apk' -print -quit)
+          test -n "$apk"
+          test "$(unzip -l "$apk" | awk '$4 == "lib/arm64-v8a/libmgruntime.so" { count++ } END { print count + 0 }')" -eq 1
+          if unzip -l "$apk" | grep -Eq 'lib/(x86|x86_64|armeabi-v7a)/'; then
+            echo "Unexpected ABI in Android Vulkan smoke APK" >&2
+            exit 1
+          fi
+          apkanalyzer manifest print "$apk" | tee Artifacts/android-vulkan-manifest.txt
+          grep -q 'android:minSdkVersion="29"' Artifacts/android-vulkan-manifest.txt
+          grep -q 'android:name="android.hardware.vulkan.version"' Artifacts/android-vulkan-manifest.txt
+          grep -q 'android:required="true"' Artifacts/android-vulkan-manifest.txt
+          grep -Eq 'android:version="0x0*401000"' Artifacts/android-vulkan-manifest.txt
+
+      - name: Upload Android Vulkan artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-vulkan-preview
+          path: |
+            Artifacts/NuGet/MonoGame.Framework.Android.Vulkan.*.nupkg
+            Artifacts/native/mgruntime/androidvk/android-arm64/Release/libmgruntime.so
+            Artifacts/android-vulkan-readelf-*.txt
+            Artifacts/android-vulkan-manifest.txt
+            Tests/Artifacts/**/*.apk
+
   apple-metal:
     name: apple-metal-preview
     runs-on: macos-26

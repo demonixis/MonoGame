@@ -132,6 +132,7 @@ namespace Microsoft.Xna.Framework
 
                     if (_graphicsDeviceManager != null)
                     {
+                        Platform?.BeforeGraphicsDeviceDispose();
                         (_graphicsDeviceManager as GraphicsDeviceManager).Dispose();
                         _graphicsDeviceManager = null;
                     }

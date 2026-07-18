@@ -54,6 +54,7 @@ namespace Microsoft.Xna.Framework.Content
             's', // Xbox Series
             'A', // macOS Metal
             'I', // iOS Metal
+            'K', // Android Vulkan
 
             // NOTE: There are additional identifiers for consoles that
             // are not defined in this repository.  Be sure to ask the

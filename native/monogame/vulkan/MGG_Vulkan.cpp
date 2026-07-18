@@ -18,6 +18,10 @@
 #define VULKAN_HPP_NO_EXCEPTIONS
 #define VULKAN_HPP_TYPESAFE_CONVERSION 1
 
+#if defined(MG_ANDROID)
+#define VK_USE_PLATFORM_ANDROID_KHR 1
+#include <android/native_window.h>
+#endif
 
 #if defined(__APPLE__)
 #include <MoltenVK/mvk_vulkan.h>
@@ -42,7 +46,7 @@
 #define VMA_STATIC_VULKAN_FUNCTIONS 1
 #include <vk_mem_alloc.h>
 
-#if defined(MG_SDL2)
+#if defined(MG_SDL2) && !defined(MG_ANDROID)
 #include <SDL_vulkan.h>
 #include <SDL_syswm.h>
 #include <SDL_events.h>
@@ -235,6 +239,7 @@ struct MGVK_Transfer
 
 
 const int MAX_TEXTURE_SLOTS = 16;
+const int MG_SHADER_STAGE_COUNT = 2;
 
 struct MGG_GraphicsDevice
 {
@@ -280,7 +285,9 @@ struct MGG_GraphicsDevice
 	VkRect2D scissor = { 0 };
 	bool scissorDirty = false;
 
-#if defined(MG_SDL2)
+#if defined(MG_ANDROID)
+	ANativeWindow* window = nullptr;
+#elif defined(MG_SDL2)
 	SDL_Window* window = nullptr;
 #else
 #error Not Implemented
@@ -298,8 +305,8 @@ struct MGG_GraphicsDevice
 
 	uint64_t currentTextureId = 1;
 	uint64_t currentSamplerId = 1;
-	MGG_Texture* textures[(mgint)MGShaderStage::Count][MAX_TEXTURE_SLOTS] = { 0 };
-	MGG_SamplerState* samplers[(mgint)MGShaderStage::Count][MAX_TEXTURE_SLOTS] = { 0 };
+	MGG_Texture* textures[MG_SHADER_STAGE_COUNT][MAX_TEXTURE_SLOTS] = { 0 };
+	MGG_SamplerState* samplers[MG_SHADER_STAGE_COUNT][MAX_TEXTURE_SLOTS] = { 0 };
 	uint32_t textureSamplerDirty = 0;
 	MGG_Texture* nullTexture[3];
 
@@ -307,7 +314,7 @@ struct MGG_GraphicsDevice
 	float blendFactor[4] = { 0 };
 
 	uint32_t currentShaderId = 0;
-	MGG_Shader* shaders[(mgint)MGShaderStage::Count] = { 0 };
+	MGG_Shader* shaders[MG_SHADER_STAGE_COUNT] = { 0 };
 	bool shaderDirty = false;
 	std::map<uint64_t, MGVK_Program*> shader_programs;
 	std::vector<MGG_Shader*> all_shaders;
@@ -604,27 +611,74 @@ static VkFormat ToVkFormat(MGSurfaceFormat format)
 		return VK_FORMAT_BC3_SRGB_BLOCK;
 	case MGSurfaceFormat::Dxt1a:
 		return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+	case MGSurfaceFormat::RgbEtc1:
+	case MGSurfaceFormat::Rgb8Etc2:
+		return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
+	case MGSurfaceFormat::Srgb8Etc2:
+		return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
+	case MGSurfaceFormat::Rgb8A1Etc2:
+		return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
+	case MGSurfaceFormat::Srgb8A1Etc2:
+		return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
+	case MGSurfaceFormat::Rgba8Etc2:
+		return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
+	case MGSurfaceFormat::SRgb8A8Etc2:
+		return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
+	case MGSurfaceFormat::Astc4X4Rgba:
+		return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+	case MGSurfaceFormat::Astc5X5Rgba:
+		return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
+	case MGSurfaceFormat::Astc6X6Rgba:
+		return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+	case MGSurfaceFormat::Astc8X8Rgba:
+		return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+	case MGSurfaceFormat::Astc10X10Rgba:
+		return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
+	case MGSurfaceFormat::Astc12X12Rgba:
+		return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
 	default:
 		assert(0);
 	}
+	return VK_FORMAT_UNDEFINED;
 }
 
-static VkFormat ToVkFormat(MGDepthFormat format)
+static bool MGVK_SupportsOptimalFormat(VkPhysicalDevice device, VkFormat format, VkFormatFeatureFlags features)
 {
-	switch (format)
+	VkFormatProperties properties = {};
+	vkGetPhysicalDeviceFormatProperties(device, format, &properties);
+	return (properties.optimalTilingFeatures & features) == features;
+}
+
+static VkFormat MGVK_SelectDepthFormat(MGG_GraphicsDevice* device, MGDepthFormat requested)
+{
+	if (requested == MGDepthFormat::None)
+		return VK_FORMAT_UNDEFINED;
+
+	if (requested == MGDepthFormat::Depth16)
 	{
-	case MGDepthFormat::Depth16:
-		return VkFormat::VK_FORMAT_D16_UNORM;
-	case MGDepthFormat::Depth24:
-	case MGDepthFormat::Depth24Stencil8:
-#if defined(__APPLE__)
-		return VkFormat::VK_FORMAT_D32_SFLOAT_S8_UINT;
-#else
-		return VkFormat::VK_FORMAT_D24_UNORM_S8_UINT;
-#endif
-	default:
-		return VkFormat::VK_FORMAT_UNDEFINED;
+		return MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_D16_UNORM, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+			? VK_FORMAT_D16_UNORM
+			: VK_FORMAT_UNDEFINED;
 	}
+
+	if (requested == MGDepthFormat::Depth24Stencil8)
+	{
+		const VkFormat candidates[] = { VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT };
+		for (auto candidate : candidates)
+		{
+			if (MGVK_SupportsOptimalFormat(device->physicalDevice, candidate, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))
+				return candidate;
+		}
+		return VK_FORMAT_UNDEFINED;
+	}
+
+	const VkFormat candidates[] = { VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D16_UNORM };
+	for (auto candidate : candidates)
+	{
+		if (MGVK_SupportsOptimalFormat(device->physicalDevice, candidate, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))
+			return candidate;
+	}
+	return VK_FORMAT_UNDEFINED;
 }
 
 static VkFormat ToVkFormat(MGVertexElementFormat format)
@@ -715,6 +769,9 @@ static VkImageCreateFlags ToVkImageCreateFlags(MGTextureType type)
 	{
 	case MGTextureType::Cube:
 		return VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+	case MGTextureType::_2D:
+	case MGTextureType::_3D:
+		return 0;
 	}
 	return 0;
 }
@@ -794,7 +851,11 @@ MGG_GraphicsSystem* MGG_GraphicsSystem_Create()
 
 	VkApplicationInfo app_info = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
 	app_info.pNext = nullptr;
+#if defined(MG_ANDROID)
+	app_info.apiVersion = VK_API_VERSION_1_1;
+#else
 	app_info.apiVersion = VK_API_VERSION_1_0;
+#endif
 
 	// TODO: pass these thru from C# is more flexible!
 	app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -825,7 +886,16 @@ MGG_GraphicsSystem* MGG_GraphicsSystem_Create()
 	}
 
 	std::vector<const char*> instanceExtensions;
-#if defined(MG_SDL2)
+#if defined(MG_ANDROID)
+	if (!SupportsExtension(supportedInstanceExtensions, VK_KHR_SURFACE_EXTENSION_NAME) ||
+		!SupportsExtension(supportedInstanceExtensions, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME))
+	{
+		printf("Android Vulkan requires %s and %s.\n", VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+		return nullptr;
+	}
+	instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+	instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+#elif defined(MG_SDL2)
 	{
 		uint32_t count = 0;
 		if (SDL_Vulkan_GetInstanceExtensions(nullptr, &count, nullptr))
@@ -877,6 +947,14 @@ MGG_GraphicsSystem* MGG_GraphicsSystem_Create()
 	}
 
 	printf("Vulkan instance version: %d.%d.%d\n", VK_API_VERSION_MAJOR(version), VK_API_VERSION_MINOR(version), VK_API_VERSION_PATCH(version));
+
+#if defined(MG_ANDROID)
+	if (version < VK_API_VERSION_1_1)
+	{
+		printf("Android Vulkan requires Vulkan 1.1 or newer.\n");
+		return nullptr;
+	}
+#endif
 
 	// This extension should be widely supported (~89% of systems according to https://vulkan.gpuinfo.org/listinstanceextensions.php?platform=all)
 	// This extension is used to initialize the VK_EXT_custom_border_color (which therefore won't be supported if absent)
@@ -1016,6 +1094,15 @@ void MGG_GraphicsAdapter_GetInfo(MGG_GraphicsAdapter* adapter, MGG_GraphicsAdapt
 	info.SubSystemId = 0;
 	info.MonitorHandle = 0;
 
+#if defined(MG_ANDROID)
+	info.CurrentDisplayMode.width = 1;
+	info.CurrentDisplayMode.height = 1;
+	info.CurrentDisplayMode.format = MGSurfaceFormat::Color;
+	info.DisplayModeCount = 1;
+	if (adapter->modes.empty())
+		adapter->modes.push_back(info.CurrentDisplayMode);
+	info.DisplayModes = adapter->modes.data();
+#else
 	// Get the number of display modes for the primary display
 	int displayIndex = 0; // Primary display
 	int numModes = SDL_GetNumDisplayModes(displayIndex);
@@ -1078,6 +1165,7 @@ void MGG_GraphicsAdapter_GetInfo(MGG_GraphicsAdapter* adapter, MGG_GraphicsAdapt
 	}
 	info.DisplayModeCount = adapter->modes.size();
 	info.DisplayModes = adapter->modes.data();
+#endif
 }
 
 static void mggCreateImage(MGG_GraphicsDevice* device, VkImageCreateInfo* info, MGG_Texture* texture)
@@ -1304,7 +1392,10 @@ static void MGVK_ExecuteAndFreeCommandBuffer(MGG_GraphicsDevice* device, VkComma
 	vkFreeCommandBuffers(device->device, pool, 1, &commandBuffer);
 }
 
-MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_GraphicsAdapter* adapter)
+static MGG_GraphicsDevice* MGVK_GraphicsDevice_Create(
+	MGG_GraphicsSystem* system,
+	MGG_GraphicsAdapter* adapter,
+	MGG_PresentationSurface* presentationSurface)
 {
 	assert(system != nullptr);
 	assert(adapter != nullptr);
@@ -1315,6 +1406,38 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 	device->physicalDevice = adapter->device;
 	device->deviceFeatures = adapter->features;
 	device->deviceProperties = adapter->properties;
+
+#if defined(MG_ANDROID)
+	if (device->deviceProperties.apiVersion < VK_API_VERSION_1_1)
+	{
+		printf("Selected Android GPU does not support Vulkan 1.1.\n");
+		delete device;
+		return nullptr;
+	}
+
+	if (presentationSurface != nullptr)
+	{
+		if (presentationSurface->Kind != MGPresentationSurfaceKind::AndroidNativeWindow || presentationSurface->Handle == nullptr)
+		{
+			printf("Android Vulkan requires a valid ANativeWindow presentation surface.\n");
+			delete device;
+			return nullptr;
+		}
+
+		device->window = static_cast<ANativeWindow*>(presentationSurface->Handle);
+		VkAndroidSurfaceCreateInfoKHR surfaceCreateInfo = { VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR };
+		surfaceCreateInfo.window = device->window;
+		auto surfaceResult = vkCreateAndroidSurfaceKHR(device->instance, &surfaceCreateInfo, nullptr, &device->surface);
+		if (surfaceResult != VK_SUCCESS)
+		{
+			printf("vkCreateAndroidSurfaceKHR failed with VkResult %d.\n", surfaceResult);
+			delete device;
+			return nullptr;
+		}
+	}
+#else
+	(void)presentationSurface;
+#endif
 
 	printf("Selected GPU: %s\n", device->deviceProperties.deviceName);
 	printf("Supported Vulkan API version: %d.%d.%d\n", VK_API_VERSION_MAJOR(device->deviceProperties.apiVersion), VK_API_VERSION_MINOR(device->deviceProperties.apiVersion), VK_API_VERSION_PATCH(device->deviceProperties.apiVersion));
@@ -1327,13 +1450,20 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 	assert(queueFamilyCount > 0);
 
 	VkQueueFamilyProperties* queueFamilyProps = new VkQueueFamilyProperties[queueFamilyCount];
-	device->graphicsQueueFamily = 0;
+	device->graphicsQueueFamily = UINT32_MAX;
 	{
 		vkGetPhysicalDeviceQueueFamilyProperties(device->physicalDevice, &queueFamilyCount, queueFamilyProps);
 
-		for (int i = 0; i < queueFamilyCount; i++)
+		for (uint32_t i = 0; i < queueFamilyCount; i++)
 		{
-			if ((queueFamilyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+			if ((queueFamilyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+				continue;
+
+			VkBool32 supportsPresentation = VK_TRUE;
+			if (device->surface != VK_NULL_HANDLE)
+				vkGetPhysicalDeviceSurfaceSupportKHR(device->physicalDevice, i, device->surface, &supportsPresentation);
+
+			if (supportsPresentation == VK_TRUE)
 			{
 				device->graphicsQueueFamily = i;
 				break;
@@ -1341,6 +1471,15 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 		}
 
 		delete [] queueFamilyProps;
+	}
+
+	if (device->graphicsQueueFamily == UINT32_MAX)
+	{
+		printf("No Vulkan queue family supports both graphics and presentation.\n");
+		if (device->surface != VK_NULL_HANDLE)
+			vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+		delete device;
+		return nullptr;
 	}
 
 	VkDeviceQueueCreateInfo queueCreateInfo {};
@@ -1382,14 +1521,22 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 	if (!swapChainSupported)
 	{
 		printf("%s is not supported by this driver!\n", VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		// This is a critical failure.
+		if (device->surface != VK_NULL_HANDLE)
+			vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+		delete device;
 		return nullptr;
 	}
 
 	// This is technically required by -fvk-use-dx-layout, but the driver may still accept it and it'll just work. It might also cause shader compilation failures, or insane rendering.
 	// This has pretty good coverage.
-	if (!scalarBlockLayoutSupported) 
-		printf("%s is not supported by this driver!\n", VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
+	if (!scalarBlockLayoutSupported)
+	{
+		printf("%s is required by MonoGame Vulkan shaders but is not supported by this driver.\n", VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
+		if (device->surface != VK_NULL_HANDLE)
+			vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+		delete device;
+		return nullptr;
+	}
 	if (!device->customBorderColorSupported) // We can live without this extention.
 		printf("%s is not supported by this driver!\n", VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
 	// This is only required for reflection information when compiling shaders, so worst case it's just a validation failure. TODO: Potentially look at stripping this from the SPIR-V?
@@ -1440,6 +1587,19 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 	VkPhysicalDeviceScalarBlockLayoutFeatures scalarFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES };
 	if (scalarBlockLayoutSupported)
 	{
+		VkPhysicalDeviceScalarBlockLayoutFeatures supportedScalarFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES };
+		VkPhysicalDeviceFeatures2 supportedFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+		supportedFeatures.pNext = &supportedScalarFeatures;
+		vkGetPhysicalDeviceFeatures2(device->physicalDevice, &supportedFeatures);
+		if (supportedScalarFeatures.scalarBlockLayout != VK_TRUE)
+		{
+			printf("Vulkan scalarBlockLayout is required but unavailable on the selected GPU.\n");
+			if (device->surface != VK_NULL_HANDLE)
+				vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+			delete device;
+			return nullptr;
+		}
+
 		extensions.push_back(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
 		scalarFeatures.scalarBlockLayout = VK_TRUE;
 		scalarFeatures.pNext = lastFeature;
@@ -1464,9 +1624,17 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 	deviceCreateInfo.ppEnabledExtensionNames = extensions.data();
 
 	auto res = vkCreateDevice(device->physicalDevice, &deviceCreateInfo, NULL, &device->device);
-	VK_CHECK_RESULT(res);
+	if (res != VK_SUCCESS)
+	{
+		printf("vkCreateDevice failed with VkResult %d.\n", res);
+		if (device->surface != VK_NULL_HANDLE)
+			vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+		delete device;
+		return nullptr;
+	}
 	VK_SET_OBJECT_NAME(device->device, device->device, VK_OBJECT_TYPE_DEVICE, "MGG_GraphicsDevice.device");
 	VK_SET_OBJECT_NAME(device->device, device->physicalDevice, VK_OBJECT_TYPE_PHYSICAL_DEVICE, "MGG_GraphicsDevice.physicalDevice");
+	VK_SET_OBJECT_NAME(device->device, device->surface, VK_OBJECT_TYPE_SURFACE_KHR, "MGG_GraphicsDevice.surface");
 
 	VmaAllocatorCreateInfo allocatorInfo = {};
 	allocatorInfo.instance = system->instance;
@@ -1548,8 +1716,26 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 	return device;
 }
 
-static void MGVK_CleanupSwapChain(MGG_GraphicsDevice* device)
+MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_GraphicsAdapter* adapter)
 {
+	return MGVK_GraphicsDevice_Create(system, adapter, nullptr);
+}
+
+MGG_GraphicsDevice* MGG_GraphicsDevice_CreateWithSurface(
+	MGG_GraphicsSystem* system,
+	MGG_GraphicsAdapter* adapter,
+	MGG_PresentationSurface& surface)
+{
+	return MGVK_GraphicsDevice_Create(system, adapter, &surface);
+}
+
+static void MGVK_CleanupSwapChain(MGG_GraphicsDevice* device, bool queueLockHeld = false)
+{
+	if (queueLockHeld)
+	{
+		vkQueueWaitIdle(device->queue);
+	}
+	else
 	{
 		std::lock_guard lock(device->queueMutex);
 		vkQueueWaitIdle(device->queue);
@@ -1645,6 +1831,25 @@ static void MGVK_CleanupSwapChain(MGG_GraphicsDevice* device)
 	}
 }
 
+void MGG_GraphicsDevice_SuspendPresentation(MGG_GraphicsDevice* device)
+{
+	if (device == nullptr || device->device == VK_NULL_HANDLE)
+		return;
+
+	vkDeviceWaitIdle(device->device);
+	MGVK_CleanupSwapChain(device);
+
+	if (device->surface != VK_NULL_HANDLE)
+	{
+		vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+		device->surface = VK_NULL_HANDLE;
+	}
+
+	device->window = nullptr;
+	device->swapchainWidth = 0;
+	device->swapchainHeight = 0;
+}
+
 void MGG_GraphicsDevice_Destroy(MGG_GraphicsDevice* device)
 {
 	assert(device != nullptr);
@@ -1710,16 +1915,35 @@ void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_C
 	assert(device != nullptr);
 	memset(&caps, 0, sizeof(caps));
 
-	// TODO: Get actual stats from the device!
-
 	caps.MaxTextureSlots = 16;
 	caps.MaxVertexBufferSlots = 8;
 	caps.MaxVertexTextureSlots = 8;
 
 	// Vulkan shader profile from pipeline.
 	caps.ShaderProfile = 80;
-	caps.MaxMultiSampleCount = 4;
-	caps.TextureCompression = 1; // S3TC/BC, preserving the existing native contract.
+	VkSampleCountFlags sampleCounts = device->deviceProperties.limits.framebufferColorSampleCounts &
+		device->deviceProperties.limits.framebufferDepthSampleCounts;
+	caps.MaxMultiSampleCount = 1;
+	if ((sampleCounts & VK_SAMPLE_COUNT_8_BIT) != 0)
+		caps.MaxMultiSampleCount = 8;
+	else if ((sampleCounts & VK_SAMPLE_COUNT_4_BIT) != 0)
+		caps.MaxMultiSampleCount = 4;
+	else if ((sampleCounts & VK_SAMPLE_COUNT_2_BIT) != 0)
+		caps.MaxMultiSampleCount = 2;
+
+	caps.TextureCompression = MGTextureCompressionCapabilities::None;
+	if (MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_BC1_RGBA_UNORM_BLOCK, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+		MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_BC3_UNORM_BLOCK, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT))
+		caps.TextureCompression = static_cast<MGTextureCompressionCapabilities>(
+			static_cast<mgint>(caps.TextureCompression) | static_cast<mgint>(MGTextureCompressionCapabilities::S3tc));
+	if (MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+		MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT))
+		caps.TextureCompression = static_cast<MGTextureCompressionCapabilities>(
+			static_cast<mgint>(caps.TextureCompression) | static_cast<mgint>(MGTextureCompressionCapabilities::Etc2));
+	if (MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_ASTC_4x4_UNORM_BLOCK, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+		MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_ASTC_12x12_UNORM_BLOCK, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT))
+		caps.TextureCompression = static_cast<MGTextureCompressionCapabilities>(
+			static_cast<mgint>(caps.TextureCompression) | static_cast<mgint>(MGTextureCompressionCapabilities::Astc));
 }
 
 void MGVK_RecreateSwapChain(
@@ -1733,20 +1957,86 @@ void MGVK_RecreateSwapChain(
 	mgint syncInterval)
 {
 	assert(device != nullptr);
-	assert(nativeWindowHandle != nullptr);
+	if (nativeWindowHandle == nullptr)
+		return;
 
 	vkDeviceWaitIdle(device->device);
 
 	std::lock_guard lock(device->queueMutex);
 
 	VkResult res;
+	auto presentationOperationFailed = [&](VkResult result, const char* operation)
+	{
+		if (result == VK_SUCCESS)
+			return false;
 
-	// Create the surface.
-#if defined(MG_SDL2)
+		if (result == VK_ERROR_OUT_OF_DATE_KHR ||
+			result == VK_SUBOPTIMAL_KHR ||
+			result == VK_ERROR_SURFACE_LOST_KHR)
+		{
+			printf("%s reported a recoverable presentation transition (VkResult %d).\n", operation, result);
+			MGVK_CleanupSwapChain(device, true);
+
+			if (result == VK_ERROR_SURFACE_LOST_KHR && device->surface != VK_NULL_HANDLE)
+			{
+				vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+				device->surface = VK_NULL_HANDLE;
+				device->window = nullptr;
+			}
+
+			return true;
+		}
+
+		printf("%s failed with VkResult %d.\n", operation, result);
+		return true;
+	};
+
+	// Create or replace the host-owned presentation surface.
+#if defined(MG_ANDROID)
+	auto nativeWindow = static_cast<ANativeWindow*>(nativeWindowHandle);
+	if (nativeWindow != device->window || device->surface == VK_NULL_HANDLE)
+	{
+		MGVK_CleanupSwapChain(device, true);
+
+		if (device->surface != VK_NULL_HANDLE)
+			vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+
+		VkAndroidSurfaceCreateInfoKHR surfaceCreateInfo = { VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR };
+		surfaceCreateInfo.window = nativeWindow;
+		res = vkCreateAndroidSurfaceKHR(device->instance, &surfaceCreateInfo, nullptr, &device->surface);
+		if (res != VK_SUCCESS)
+		{
+			printf("vkCreateAndroidSurfaceKHR failed with VkResult %d.\n", res);
+			device->surface = VK_NULL_HANDLE;
+			device->window = nullptr;
+			return;
+		}
+
+		VkBool32 supportsPresentation = VK_FALSE;
+		res = vkGetPhysicalDeviceSurfaceSupportKHR(
+			device->physicalDevice,
+			device->graphicsQueueFamily,
+			device->surface,
+			&supportsPresentation);
+		if (presentationOperationFailed(res, "vkGetPhysicalDeviceSurfaceSupportKHR"))
+			return;
+		if (supportsPresentation != VK_TRUE)
+		{
+			printf("The selected graphics queue cannot present to the replacement Android surface.\n");
+			vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
+			device->surface = VK_NULL_HANDLE;
+			device->window = nullptr;
+			return;
+		}
+
+		device->window = nativeWindow;
+		VK_SET_OBJECT_NAME(device->device, device->surface, VK_OBJECT_TYPE_SURFACE_KHR, "MGG_GraphicsDevice.surface");
+	}
+#elif defined(MG_SDL2)
 	auto sdl_window = (SDL_Window*)nativeWindowHandle;
 	if (sdl_window != device->window)
 	{
-		MGVK_CleanupSwapChain(device);
+		MGVK_CleanupSwapChain(device, true);
 
 		if (device->surface != nullptr)
 			vkDestroySurfaceKHR(device->instance, device->surface, nullptr);
@@ -1784,11 +2074,12 @@ void MGVK_RecreateSwapChain(
 		device->swapchain != VK_NULL_HANDLE)
 		return;
 
-	MGVK_CleanupSwapChain(device);
+	MGVK_CleanupSwapChain(device, true);
 
 	VkSurfaceCapabilitiesKHR surface_capabilities;
 	res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalDevice, device->surface, &surface_capabilities);
-	VK_CHECK_RESULT(res);
+	if (presentationOperationFailed(res, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"))
+		return;
 
 	// If max extent is zero'd, it means the window is minimized, and we should leave the swapchain to VK_NULL_HANDLE and stop rendering (this is done in MGP_Platform_BeforeDraw()).
 	if (surface_capabilities.maxImageExtent.width == 0 || surface_capabilities.maxImageExtent.height == 0)
@@ -1826,11 +2117,13 @@ void MGVK_RecreateSwapChain(
 	{
 		uint32_t format_count = 0;
 		res = vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalDevice, device->surface, &format_count, nullptr);
-		VK_CHECK_RESULT(res);
+		if (presentationOperationFailed(res, "vkGetPhysicalDeviceSurfaceFormatsKHR"))
+			return;
 
 		std::vector<VkSurfaceFormatKHR> surfFormats(format_count);
 		res = vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalDevice, device->surface, &format_count, surfFormats.data());
-		VK_CHECK_RESULT(res);
+		if (presentationOperationFailed(res, "vkGetPhysicalDeviceSurfaceFormatsKHR"))
+			return;
 
 	RETRY_SURFACE_FORMAT_SEARCH:
 
@@ -1887,11 +2180,13 @@ void MGVK_RecreateSwapChain(
 	// Query supported present modes and select the best one
 	uint32_t presentModeCount = 0;
 	res = vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalDevice, device->surface, &presentModeCount, nullptr);
-	VK_CHECK_RESULT(res);
+	if (presentationOperationFailed(res, "vkGetPhysicalDeviceSurfacePresentModesKHR"))
+		return;
 	
 	std::vector<VkPresentModeKHR> presentModes(presentModeCount);
 	res = vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalDevice, device->surface, &presentModeCount, presentModes.data());
-	VK_CHECK_RESULT(res);
+	if (presentationOperationFailed(res, "vkGetPhysicalDeviceSurfacePresentModesKHR"))
+		return;
 	
 	// Prefer MAILBOX -> IMMEDIATE -> FIFO (FIFO is always supported)
 	device->syncInterval = syncInterval; // 0 is IMMEDIATE, 1 is either MAILBOX or FIFO, 2 is half-Vsync and we currently don't support that on Vulkan.
@@ -1940,12 +2235,14 @@ void MGVK_RecreateSwapChain(
 		create_info.minImageCount = std::min(create_info.minImageCount, surface_capabilities.maxImageCount);
 
 	res = vkCreateSwapchainKHR(device->device, &create_info, nullptr, &device->swapchain);
-	VK_CHECK_RESULT(res);
+	if (presentationOperationFailed(res, "vkCreateSwapchainKHR"))
+		return;
 	VK_SET_OBJECT_NAME(device->device, device->swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR, "MGG_GraphicsDevice.swapchain");
 
 	uint32_t swapchainCount = 0;
 	res = vkGetSwapchainImagesKHR(device->device, device->swapchain, &swapchainCount, NULL);
-	VK_CHECK_RESULT(res);
+	if (presentationOperationFailed(res, "vkGetSwapchainImagesKHR"))
+		return;
 
 	// Do we need to change the number of swapchain images?  This can happen for various reasons
 	// including display changes and refresh rates.
@@ -2021,7 +2318,8 @@ void MGVK_RecreateSwapChain(
 
 	std::vector<VkImage> swapchainImages(swapchainCount);
 	res = vkGetSwapchainImagesKHR(device->device, device->swapchain, &swapchainCount, swapchainImages.data());
-	VK_CHECK_RESULT(res);
+	if (presentationOperationFailed(res, "vkGetSwapchainImagesKHR"))
+		return;
 
 	for (uint32_t i = 0; i < swapchainCount; ++i)
 	{
@@ -2138,7 +2436,17 @@ void MGG_GraphicsDevice_ResizeSwapchain(
 	mgint syncInterval)
 {
 	assert(device);
+#if defined(MG_ANDROID)
+	assert(surface.Kind == MGPresentationSurfaceKind::AndroidNativeWindow);
+#else
 	assert(surface.Kind == MGPresentationSurfaceKind::SdlWindow);
+#endif
+
+	if (surface.Handle == nullptr)
+	{
+		MGG_GraphicsDevice_SuspendPresentation(device);
+		return;
+	}
 
 	// There is no zero... always at least 1.
 	if (multiSampleCount == 0)
@@ -2153,11 +2461,17 @@ void MGG_GraphicsDevice_ResizeSwapchain(
 		return;
 
 	auto vkColor = ToVkFormat(color);
-	auto vkDepth = ToVkFormat(depth);
+	auto vkDepth = MGVK_SelectDepthFormat(device, depth);
+	if (depth != MGDepthFormat::None && vkDepth == VK_FORMAT_UNDEFINED)
+	{
+		printf("No supported Vulkan depth/stencil format satisfies the requested MonoGame depth format.\n");
+		return;
+	}
 	
 	MGVK_RecreateSwapChain(device, surface.Handle, width, height, vkColor, vkDepth, multiSampleCount, syncInterval);
 
-	MGVK_PrepareFrame(device);
+	if (device->swapchain != VK_NULL_HANDLE)
+		MGVK_PrepareFrame(device);
 }
 
 
@@ -2211,7 +2525,7 @@ void MGVK_BeginCommandBuffer(VkCommandBuffer commandBuffer)
 	//vkCmdSetDepthClampEnableEXT(commandBuffer, VK_TRUE);
 }
 
-void MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
+bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 {
 	VkResult res;
 
@@ -2228,21 +2542,41 @@ void MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 	{
 		res = vkAcquireNextImageKHR(device->device, device->swapchain, UINT64_MAX,
 			frame.imageAcquiredSemaphore, VK_NULL_HANDLE, &frame.image_index);
-		VK_CHECK_RESULT(res);
+		if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
+		{
+			frame.image_index = -1;
+			MGVK_RecreateSwapChain(device);
+			return false;
+		}
+		if (res == VK_ERROR_SURFACE_LOST_KHR)
+		{
+			MGG_GraphicsDevice_SuspendPresentation(device);
+			return false;
+		}
+		if (res != VK_SUCCESS)
+		{
+			printf("vkAcquireNextImageKHR failed with VkResult %d.\n", res);
+			return false;
+		}
 	}
 
 	// This should be cleared by now.
 	res = vkResetFences(device->device, 1, &frame.completedFence);
 	VK_CHECK_RESULT(res);
+	return frame.image_index != uint32_t(-1);
 }
 
 void MGVK_PrepareFrame(MGG_GraphicsDevice* device)
 {
+	if (device->swapchain == VK_NULL_HANDLE || device->frames.empty() || device->frameIndex >= device->frames.size())
+		return;
+
 	auto& frame = device->frames[device->frameIndex];
 
 	// This is only here for the first frame or for after the
 	// swapchain is resized...  normally this occurs on Present.
-	MGVK_TryAcquireSwap(device, frame);
+	if (!MGVK_TryAcquireSwap(device, frame))
+		return;
 
 	// Cleanup resources from the last time this frame was rendered.
 	MGVK_ProcessDescriptorCaches(device, device->frame);
@@ -2270,14 +2604,29 @@ void MGVK_PrepareFrame(MGG_GraphicsDevice* device)
 mgint MGG_GraphicsDevice_BeginFrame(MGG_GraphicsDevice* device)
 {
 	assert(device != nullptr);
+	if (device->swapchain == VK_NULL_HANDLE &&
+		device->surface != VK_NULL_HANDLE &&
+		device->window != nullptr &&
+		device->swapchainWidth > 0 &&
+		device->swapchainHeight > 0)
+	{
+		MGVK_RecreateSwapChain(device);
+		if (device->swapchain != VK_NULL_HANDLE)
+			MGVK_PrepareFrame(device);
+	}
 
-	// We do nothing here... everything is handled in Present().
+	if (device->swapchain == VK_NULL_HANDLE || device->frames.empty() ||
+		device->frameIndex >= device->frames.size() || !device->frames[device->frameIndex].is_recording)
+		return -1;
+
 	return device->frameIndex;
 }
 
 void MGG_GraphicsDevice_Clear(MGG_GraphicsDevice* device, MGClearOptions options, Vector4& color, mgfloat depth, mgint stencil)
 {
 	assert(device != nullptr);
+	if (MGG_GraphicsDevice_BeginFrame(device) < 0)
+		return;
 
 	// Make sure something was set to be cleared.
 	if ((mgint)options == 0)
@@ -2577,16 +2926,17 @@ void MGVK_CleanupPendingTransfers(MGG_GraphicsDevice* device)
 
 void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, mgint syncInterval)
 {
-	assert(device != nullptr);
-	assert(syncInterval >= 0);
-	assert(currentFrame >= 0);
-	assert((device->frame % device->swapchainCount) == currentFrame);
+	if (device == nullptr || syncInterval < 0 || currentFrame < 0 ||
+		device->swapchain == VK_NULL_HANDLE || device->swapchainCount == 0 ||
+		device->frames.empty() || device->frameIndex >= device->frames.size())
+		return;
 
 
 	auto frameIndex = currentFrame % device->swapchainCount;
 
 	auto& frame = device->frames[device->frameIndex];
-	assert(frame.is_recording);
+	if (!frame.is_recording || frame.image_index == uint32_t(-1))
+		return;
 	auto& swap = device->swapchains[frame.image_index];
 
 	MGVK_EndRenderPass(device, frame.commandBuffer);
@@ -2613,6 +2963,11 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &swap.renderCompleteSemaphore;
 		res = vkQueueSubmit(device->queue, 1, &submitInfo, frame.completedFence);
+		if (res != VK_SUCCESS)
+		{
+			printf("vkQueueSubmit failed with VkResult %d.\n", res);
+			return;
+		}
 
 		VkPresentInfoKHR presentInfo = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
 		presentInfo.waitSemaphoreCount = 1;
@@ -2630,7 +2985,13 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		MGVK_CleanupPendingTransfers(device);
 	}
 
-	if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
+	if (res == VK_ERROR_SURFACE_LOST_KHR)
+	{
+		frame.image_index = -1;
+		MGG_GraphicsDevice_SuspendPresentation(device);
+		return;
+	}
+	else if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
 	{
 		// This will happen if the window is minimized too.
 
@@ -2680,11 +3041,13 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		// Increment to the next frame.
 		++device->frame;
 		device->frameIndex = device->frame % device->swapchainCount;
-
-		// Get the next swap frame here so that any blocking
-		// waiting for the GPU to finish occurs during Present.
-		MGVK_PrepareFrame(device);
 	}
+
+	// Get the next swap frame here so that any blocking waiting for the GPU to
+	// finish occurs during Present.  This must be outside queueMutex because a
+	// recoverable acquire error can recreate the swapchain and wait for the queue.
+	if (device->swapchain != VK_NULL_HANDLE)
+		MGVK_PrepareFrame(device);
 }
 
 void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, mgfloat factorR, mgfloat factorG, mgfloat factorB, mgfloat factorA)
@@ -2753,6 +3116,8 @@ void MGG_GraphicsDevice_SetViewport(MGG_GraphicsDevice* device, mgint x, mgint y
 	viewport.height = height;
 	viewport.minDepth = minDepth;
 	viewport.maxDepth = maxDepth;
+	if (MGG_GraphicsDevice_BeginFrame(device) < 0)
+		return;
 
 	auto& frame = device->frames[device->frameIndex];
 	assert(frame.is_recording);
@@ -2775,6 +3140,8 @@ void MGG_GraphicsDevice_SetScissorRectangle(MGG_GraphicsDevice* device, mgint x,
 void MGG_GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture** targets, mgint* arraySlices, mgint count)
 {
 	assert(device != nullptr);
+	if (MGG_GraphicsDevice_BeginFrame(device) < 0)
+		return;
 
 	auto& frame = device->frames[device->frameIndex];
 
@@ -3947,7 +4314,7 @@ void MGG_GraphicsDevice_Draw(MGG_GraphicsDevice* device, MGPrimitiveType primiti
 	assert(device != nullptr);
 	assert(vertexStart >= 0);
 	
-	if (vertexCount <= 0)
+	if (vertexCount <= 0 || MGG_GraphicsDevice_BeginFrame(device) < 0)
 		return;
 
 	auto& frame = device->frames[device->frameIndex];
@@ -3974,7 +4341,7 @@ void MGG_GraphicsDevice_DrawIndexed(MGG_GraphicsDevice* device, MGPrimitiveType 
 	assert(indexStart >= 0);
 	assert(vertexStart >= 0);
 
-	if (primitiveCount <= 0)
+	if (primitiveCount <= 0 || MGG_GraphicsDevice_BeginFrame(device) < 0)
 		return;
 
 	auto& frame = device->frames[device->frameIndex];
@@ -4017,7 +4384,7 @@ void MGG_GraphicsDevice_DrawIndexedInstanced(
 	assert(vertexStart >= 0);
 	assert(instanceCount > 0);
 
-	if (primitiveCount <= 0)
+	if (primitiveCount <= 0 || MGG_GraphicsDevice_BeginFrame(device) < 0)
 		return;
 
 	auto& frame = device->frames[device->frameIndex];
@@ -4120,6 +4487,8 @@ uint32_t getVkFormatBlockAlignment(VkFormat format) {
 void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
 {
 	assert(device != nullptr);
+	if (MGG_GraphicsDevice_BeginFrame(device) < 0)
+		return;
 	
     auto psoTargets = device->pipelineState.targets;
     if (!psoTargets)
@@ -4248,6 +4617,8 @@ void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
 void MGG_GraphicsDevice_GetBackBufferData(MGG_GraphicsDevice* device, mgint x, mgint y, mgint width, mgint height, void* data, mgint count, mgint dataBytes)
 {
 	assert(device != nullptr);
+	if (MGG_GraphicsDevice_BeginFrame(device) < 0)
+		return;
 	assert(data != nullptr);
 	assert(count > 0);
 	assert(dataBytes > 0);
@@ -5067,7 +5438,7 @@ void MGG_Buffer_SetData(MGG_GraphicsDevice* device, MGG_Buffer*& buffer, mgint o
 		switch (buffer->type)
 		{
 		case MGBufferType::Constant:
-			for (int i=0; i < (int)MGShaderStage::Count; i++)
+			for (int i = 0; i < MG_SHADER_STAGE_COUNT; i++)
 			{
 				if (device->uniforms[i] == last)
 				{
@@ -5318,7 +5689,14 @@ MGG_Texture* MGG_RenderTarget_Create(
 
 	if (depthFormat != MGDepthFormat::None)
 	{
-        texture->depthTexture = CreateDepthTexture(device, ToVkFormat(depthFormat), width, height, multiSampleCount);
+		auto selectedDepthFormat = MGVK_SelectDepthFormat(device, depthFormat);
+		if (selectedDepthFormat == VK_FORMAT_UNDEFINED)
+		{
+			printf("No supported Vulkan depth/stencil format is available for this render target.\n");
+			MGG_Texture_Destroy(device, texture);
+			return nullptr;
+		}
+        texture->depthTexture = CreateDepthTexture(device, selectedDepthFormat, width, height, multiSampleCount);
 		VK_SET_OBJECT_NAME(device->device, texture->depthTexture->image, VK_OBJECT_TYPE_IMAGE, "MGG_Texture.depthTexture.image (for RT id: %llu)", texture->id);
 		texture->depthTexture->target_view = CreateImageView(device, texture->depthTexture, 1);
 		VK_SET_OBJECT_NAME(device->device, texture->depthTexture->target_view, VK_OBJECT_TYPE_IMAGE_VIEW, "MGG_Texture.depthTexture.target_view (for RT id: %llu)", texture->id);

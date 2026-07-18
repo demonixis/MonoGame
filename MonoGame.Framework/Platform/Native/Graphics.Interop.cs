@@ -159,8 +159,9 @@ internal enum BufferType
 
 internal enum PresentationSurfaceKind
 {
-    SdlWindow,
-    MetalLayer,
+    SdlWindow = 0,
+    MetalLayer = 1,
+    AndroidNativeWindow = 2,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -183,6 +184,15 @@ internal struct MGG_PresentationSurface
         return new MGG_PresentationSurface
         {
             Kind = PresentationSurfaceKind.MetalLayer,
+            Handle = handle,
+        };
+    }
+
+    public static MGG_PresentationSurface FromAndroidNativeWindow(nint handle)
+    {
+        return new MGG_PresentationSurface
+        {
+            Kind = PresentationSurfaceKind.AndroidNativeWindow,
             Handle = handle,
         };
     }
@@ -224,8 +234,17 @@ internal static unsafe partial class MGG
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_Create", ExactSpelling = true)]
     public static extern MGG_GraphicsDevice* GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_GraphicsAdapter* adapter);
 
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_CreateWithSurface", ExactSpelling = true)]
+    public static extern MGG_GraphicsDevice* GraphicsDevice_CreateWithSurface(
+        MGG_GraphicsSystem* system,
+        MGG_GraphicsAdapter* adapter,
+        ref MGG_PresentationSurface surface);
+
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_Destroy", ExactSpelling = true)]
     public static extern void GraphicsDevice_Destroy(MGG_GraphicsDevice* device);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SuspendPresentation", ExactSpelling = true)]
+    public static extern void GraphicsDevice_SuspendPresentation(MGG_GraphicsDevice* device);
 
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_GetCaps", ExactSpelling = true)]
     public static extern void GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, out MGG_GraphicsDevice_Caps caps);

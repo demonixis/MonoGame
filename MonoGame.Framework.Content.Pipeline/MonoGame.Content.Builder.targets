@@ -29,6 +29,7 @@
       <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'MacOSX'">$(MonoMacResourcePrefix)</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'iOS'">$(IPhoneResourcePrefix)</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'Android'">$(MonoAndroidAssetsPrefix)</PlatformResourcePrefix>
+      <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'AndroidVK'">$(MonoAndroidAssetsPrefix)</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(PlatformResourcePrefix)' != '' And !HasTrailingSlash('$(PlatformResourcePrefix)')">$(PlatformResourcePrefix)\</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(PlatformResourcePrefix)' == ''"></PlatformResourcePrefix>
       <MonoGameMGCBAdditionalArguments Condition="'$(MonoGameMGCBAdditionalArguments)' ==''">/quiet</MonoGameMGCBAdditionalArguments>
@@ -41,10 +42,11 @@
         <Output TaskParameter="Output" ItemName="ContentReferences"/>
     </CollectContentReferences>
 
-    <Error Text="The MonoGamePlatform property was not defined in the project!  It must be set to Windows, WindowsGL, WindowsDX12, MacOSX, iOS, Linux, DesktopGL, DesktopVK, RaspberryPi, Android, NativeClient, PlayStation4, PSVita, XboxOne or PlayStationMobile."
+    <Error Text="The MonoGamePlatform property was not defined in the project!  It must be set to Windows, WindowsGL, WindowsDX12, MacOSX, iOS, Linux, DesktopGL, DesktopVK, RaspberryPi, Android, AndroidVK, NativeClient, PlayStation4, PSVita, XboxOne or PlayStationMobile."
        Condition="	'$(MonoGamePlatform)' != 'Windows' And
 			'$(MonoGamePlatform)' != 'iOS' And 
 			'$(MonoGamePlatform)' != 'Android' And 
+			'$(MonoGamePlatform)' != 'AndroidVK' And
 			'$(MonoGamePlatform)' != 'Linux' And 
 			'$(MonoGamePlatform)' != 'DesktopGL' And 
 			'$(MonoGamePlatform)' != 'DesktopVK' And 
@@ -96,9 +98,10 @@
     <CreateItem Include="%(ExtraContent.FullPath)"
          AdditionalMetadata="Link=$(PlatformResourcePrefix)%(ExtraContent.ContentOutputDir)%(ExtraContent.RecursiveDir)%(ExtraContent.Filename)%(ExtraContent.Extension);CopyToOutputDirectory=PreserveNewest"
          Condition="'%(ExtraContent.Filename)' != ''">
-      <Output TaskParameter="Include" ItemName="Content" Condition="'$(MonoGamePlatform)' != 'Android' And '$(MonoGamePlatform)' != 'iOS' And '$(MonoGamePlatform)' != 'MacOSX'" />
+      <Output TaskParameter="Include" ItemName="Content" Condition="'$(MonoGamePlatform)' != 'Android' And '$(MonoGamePlatform)' != 'AndroidVK' And '$(MonoGamePlatform)' != 'iOS' And '$(MonoGamePlatform)' != 'MacOSX'" />
       <Output TaskParameter="Include" ItemName="BundleResource" Condition="'$(MonoGamePlatform)' == 'MacOSX' Or '$(MonoGamePlatform)' == 'iOS'" />
       <Output TaskParameter="Include" ItemName="AndroidAsset" Condition="'$(MonoGamePlatform)' == 'Android'" />
+      <Output TaskParameter="Include" ItemName="AndroidAsset" Condition="'$(MonoGamePlatform)' == 'AndroidVK'" />
     </CreateItem>
   </Target>
 

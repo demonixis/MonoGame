@@ -568,7 +568,7 @@ void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_C
 	caps.ShaderProfile = 2;
 #endif
 	caps.MaxMultiSampleCount = 4;
-	caps.TextureCompression = 1; // S3TC/BC
+	caps.TextureCompression = MGTextureCompressionCapabilities::S3tc;
 }
 
 void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)

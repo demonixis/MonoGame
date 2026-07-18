@@ -59,6 +59,7 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Serialization.Compiler
             's', // Xbox Series
             'A', // macOS Metal
             'I', // iOS Metal
+            'K', // Android Vulkan
         };
 
         /// <summary>

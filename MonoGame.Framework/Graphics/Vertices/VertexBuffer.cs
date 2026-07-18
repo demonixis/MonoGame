@@ -266,7 +266,7 @@ namespace Microsoft.Xna.Framework.Graphics
             PlatformSetData<T>(offsetInBytes, data, startIndex, elementCount, vertexStride, options, bufferSize, elementSizeInBytes);
         }
 
-#if NATIVE
+#if NATIVE || NATIVE_GRAPHICS
         /// <summary>
         /// Sets the vertex buffer data, uses a Span including only relevant data to be copied rather than the full source array,
         /// and the first index in the buffer to start copying to. Assumes the full Span will be copied with no padding between elements.

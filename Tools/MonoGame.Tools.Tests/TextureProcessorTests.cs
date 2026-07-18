@@ -391,6 +391,18 @@ namespace MonoGame.Tests.ContentPipeline
         {
             CompressDefault<PixelBitmapContent<Bgra4444>>(TargetPlatform.Android, Color.Red * 0.5f, 24, 16);
         }
+
+        [Test]
+        public void CompressDefaultAndroidVulkanOpaqueSquarePOT()
+        {
+            CompressDefault<Etc1BitmapContent>(TargetPlatform.AndroidVK, Color.Red);
+        }
+
+        [Test]
+        public void CompressDefaultAndroidVulkanAlphaSquarePOT()
+        {
+            CompressDefault<Etc2BitmapContent>(TargetPlatform.AndroidVK, Color.Red * 0.5f);
+        }
 #endif
     }
 }

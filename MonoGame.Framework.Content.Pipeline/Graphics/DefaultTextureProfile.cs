@@ -14,6 +14,7 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
         public override bool Supports(TargetPlatform platform)
         {
             return  platform == TargetPlatform.Android ||
+                    platform == TargetPlatform.AndroidVK ||
                     platform == TargetPlatform.DesktopGL ||
                     platform == TargetPlatform.DesktopVK ||
                     platform == TargetPlatform.MacOSX ||
@@ -54,7 +55,7 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
                     format = TextureProcessorOutputFormat.PvrCompressed;
                 else if (platform == TargetPlatform.iOSMetal)
                     format = TextureProcessorOutputFormat.AstcCompressed;
-                else if (platform == TargetPlatform.Android)
+                else if (platform == TargetPlatform.Android || platform == TargetPlatform.AndroidVK)
                     format = TextureProcessorOutputFormat.EtcCompressed;
                 else
                     format = TextureProcessorOutputFormat.DxtCompressed;
@@ -75,6 +76,15 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
                     {
                         throw new PlatformNotSupportedException(
                             "iOS Metal supports ASTC and ETC2 texture compression");
+                    }
+                }
+                else if (platform == TargetPlatform.AndroidVK)
+                {
+                    if (format != TextureProcessorOutputFormat.EtcCompressed &&
+                        format != TextureProcessorOutputFormat.AstcCompressed)
+                    {
+                        throw new PlatformNotSupportedException(
+                            "Android Vulkan supports ETC2 and ASTC texture compression");
                     }
                 }
                 else if (   platform == TargetPlatform.Windows ||

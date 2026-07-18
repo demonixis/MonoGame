@@ -1,0 +1,40 @@
+<!--
+  MonoGame - Copyright (C) MonoGame Foundation, Inc
+  This file is subject to the terms and conditions defined in
+  file 'LICENSE.txt', which is part of this source code package.
+-->
+
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <MonoGameNativeGraphicsSource Include="Platform\Native\BlendState.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\ConstantBuffer.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\DepthStencilState.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\EffectResource.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\Graphics.Interop.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\GraphicsAdapter.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\GraphicsCapabilities.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\GraphicsDebug.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\GraphicsDevice.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\Image.Interop.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\IndexBuffer.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\MGHandleAttribute.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\NativeGraphicsSystem.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\OcclusionQuery.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\Platform.Interop.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\RasterizerState.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\RenderTarget2D.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\RenderTarget3D.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\RenderTargetCube.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\SamplerState.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\SamplerStateCollection.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\Shader.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\Texture.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\Texture2D.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\Texture3D.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\TextureCollection.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\TextureCube.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\VertexBuffer.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\VertexElement.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\VertexInputLayout.Native.cs" />
+  </ItemGroup>
+</Project>

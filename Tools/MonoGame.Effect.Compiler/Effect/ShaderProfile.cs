@@ -91,7 +91,7 @@ namespace MonoGame.Effect
         {
             TargetPlatform.Windows => ShaderProfile.DirectX_11,
             TargetPlatform.iOS or TargetPlatform.Android or TargetPlatform.DesktopGL or TargetPlatform.MacOSX or TargetPlatform.RaspberryPi or TargetPlatform.Web => ShaderProfile.OpenGL,
-            TargetPlatform.DesktopVK => ShaderProfile.Vulkan,
+            TargetPlatform.DesktopVK or TargetPlatform.AndroidVK => ShaderProfile.Vulkan,
             TargetPlatform.MacOSMetal => ShaderProfile.MetalMacOS,
             TargetPlatform.iOSMetal => ShaderProfile.MetaliOS,
             TargetPlatform.WindowsDX12 or TargetPlatform.XboxOne or TargetPlatform.XboxSeries => ShaderProfile.DirectX_12,

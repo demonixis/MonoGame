@@ -110,7 +110,12 @@ namespace Microsoft.Xna.Framework.Content.Pipeline
         /// <summary>
         /// Apple iOS and iPadOS devices using Metal.
         /// </summary>
-        iOSMetal
+        iOSMetal,
+
+        /// <summary>
+        /// Android-based devices using Vulkan.
+        /// </summary>
+        AndroidVK = 18
     }
 
 

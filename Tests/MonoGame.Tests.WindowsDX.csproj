@@ -26,6 +26,10 @@
     <Compile Remove="Properties/**/*" />
     <Compile Remove="Interactive/**/*" />
     <Compile Remove="Runner/iOS/**/*" />
+    <Compile Remove="AndroidVulkanPackageSmoke/**/*" />
+    <Compile Remove="AppleMetalSmoke/**/*" />
+    <Compile Remove="AppleMetalSmoke.iOS/**/*" />
+    <Compile Remove="AppleMetalPackageSmoke/**/*" />
 
     <Compile Remove="Framework/SDL/**/*" />
   </ItemGroup>
