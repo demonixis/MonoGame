@@ -93,7 +93,7 @@ namespace Microsoft.Xna.Framework
 
             switch (Game.Activity.Resources.Configuration.Orientation)
             {
-                case Android.Content.Res.Orientation.Portrait:
+                case global::Android.Content.Res.Orientation.Portrait:
                     this._gameWindow.SetOrientation(currentOrientation == DisplayOrientation.PortraitDown ? DisplayOrientation.PortraitDown : DisplayOrientation.Portrait, false);
                     break;
                 default:
@@ -168,7 +168,7 @@ namespace Microsoft.Xna.Framework
         public override void Log(string Message)
         {
 #if LOGGING
-            Android.Util.Log.Debug("MonoGameDebug", Message);
+            global::Android.Util.Log.Debug("MonoGameDebug", Message);
 #endif
         }
 
@@ -184,7 +184,7 @@ namespace Microsoft.Xna.Framework
             }
             catch (Exception ex)
             {
-                Android.Util.Log.Error("Error in swap buffers", ex.ToString());
+                global::Android.Util.Log.Error("Error in swap buffers", ex.ToString());
             }
         }
     }

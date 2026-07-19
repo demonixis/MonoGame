@@ -13,7 +13,7 @@ namespace Microsoft.Xna.Framework
         {
             try
             {
-                return Android.App.Application.Context.Assets.Open(safeName);
+                return global::Android.App.Application.Context.Assets.Open(safeName);
             }
             catch
             {
@@ -22,4 +22,3 @@ namespace Microsoft.Xna.Framework
         }
     }
 }
-

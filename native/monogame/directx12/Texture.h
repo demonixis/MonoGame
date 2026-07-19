@@ -17,6 +17,7 @@ public:
     Texture(const Texture& other);
 #ifndef _GAMING_XBOX
     Texture(DeviceResources* device, IDXGISwapChain3* swapchain, int bufferId);
+    Texture(DeviceResources* device, ID3D12Resource* resource, MGSurfaceFormat format);
 #endif
     ~Texture();
 

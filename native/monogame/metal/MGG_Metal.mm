@@ -74,6 +74,18 @@ static constexpr mgint MGMetalTextureCompressionS3tc = 1 << 0;
 static constexpr mgint MGMetalTextureCompressionEtc2 = 1 << 1;
 static constexpr mgint MGMetalTextureCompressionAstc = 1 << 2;
 
+static __strong id<MTLDevice> g_openXrMetalDevice = nil;
+
+void MGG_OpenXR_ConfigureVulkanBootstrap(void*, void*, void*, void*) {}
+void MGG_OpenXR_ConfigureDirect3D12Adapter(mglong, mguint) {}
+
+void MGG_OpenXR_ConfigureMetalDevice(void* device)
+{
+    g_openXrMetalDevice = (__bridge id<MTLDevice>)device;
+}
+
+void* MGG_OpenXR_GetVulkanGetInstanceProcAddr() { return nullptr; }
+
 // This is the public ABI consumed by shaders emitted by Apple's Metal Shader
 // Converter.  Keeping the small subset used by MonoGame local avoids a runtime
 // dependency on the converter dylib, which remains a content-build tool only.
@@ -964,6 +976,16 @@ void MGG_EffectResource_GetBytecode(const char* name, mgbyte*& bytecode, mgint& 
 MGG_GraphicsSystem* MGG_GraphicsSystem_Create()
 {
     auto system = new MGG_GraphicsSystem();
+    if (g_openXrMetalDevice != nil)
+    {
+        auto adapter = new MGG_GraphicsAdapter();
+        adapter->device = g_openXrMetalDevice;
+        adapter->name = g_openXrMetalDevice.name.UTF8String;
+        adapter->current = { MGSurfaceFormat::Color, 1, 1 };
+        adapter->modes.push_back(adapter->current);
+        system->adapters.push_back(adapter);
+        return system;
+    }
 #if TARGET_OS_OSX
     NSArray<id<MTLDevice>>* devices = MTLCopyAllDevices();
 #else
@@ -1229,6 +1251,56 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
     device->lastSubmitted = device->commandBuffer;
     device->commandBuffer = nil;
     device->drawable = nil;
+}
+
+void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device)
+{
+    if (device == nullptr || device->commandBuffer == nil)
+        return;
+    MGMetalEndEncoder(device);
+    [device->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> completedBuffer) {
+        MGMetalReportCommandBufferError(completedBuffer);
+    }];
+    [device->commandBuffer commit];
+    device->lastSubmitted = device->commandBuffer;
+    device->commandBuffer = [device->queue commandBuffer];
+    device->pipelineDirty = true;
+}
+
+void MGG_OpenXR_GetGraphicsBinding(MGG_GraphicsDevice* device, MGG_OpenXrGraphicsBinding& binding)
+{
+    memset(&binding, 0, sizeof(binding));
+    if (device == nullptr)
+        return;
+    binding.Api = 4;
+    binding.Device = (__bridge void*)device->device;
+    binding.Queue = (__bridge void*)device->queue;
+}
+
+MGG_Texture* MGG_OpenXR_WrapRenderTarget(MGG_GraphicsDevice* device, void* image, MGSurfaceFormat format, mgint width, mgint height, MGDepthFormat depthFormat)
+{
+    if (device == nullptr || image == nullptr || width <= 0 || height <= 0)
+        return nullptr;
+    auto texture = new MGG_Texture();
+    texture->type = MGTextureType::_2D;
+    texture->format = format;
+    texture->width = width;
+    texture->height = height;
+    texture->depth = 1;
+    texture->mipmaps = 1;
+    texture->slices = 1;
+    texture->sampleCount = 1;
+    texture->depthFormat = depthFormat;
+    texture->texture = (__bridge id<MTLTexture>)image;
+    texture->depthTexture = MGMetalCreateDepthTexture(device->device, width, height, depthFormat, 1);
+    return texture;
+}
+
+void MGG_OpenXR_PrepareForRuntimeRelease(MGG_GraphicsDevice* device, MGG_Texture* texture)
+{
+    (void)texture;
+    if (device != nullptr)
+        MGMetalEndEncoder(device);
 }
 
 void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, mgfloat factorR, mgfloat factorG, mgfloat factorB, mgfloat factorA)

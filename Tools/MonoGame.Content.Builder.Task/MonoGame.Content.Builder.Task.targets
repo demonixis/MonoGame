@@ -100,7 +100,7 @@
     <PropertyGroup>
       <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'MacOSX' Or '$(MonoGamePlatform)' == 'MacOSMetal'">$(MonoMacResourcePrefix)</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'iOS' Or '$(MonoGamePlatform)' == 'iOSMetal'">$(IPhoneResourcePrefix)</PlatformResourcePrefix>
-      <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'Android'">$(MonoAndroidAssetsPrefix)</PlatformResourcePrefix>
+      <PlatformResourcePrefix Condition="'$(MonoGamePlatform)' == 'Android' Or '$(MonoGamePlatform)' == 'AndroidVK'">$(MonoAndroidAssetsPrefix)</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(PlatformResourcePrefix)' != '' And !HasTrailingSlash('$(PlatformResourcePrefix)')">$(PlatformResourcePrefix)\</PlatformResourcePrefix>
       <PlatformResourcePrefix Condition="'$(PlatformResourcePrefix)' == ''"></PlatformResourcePrefix>
       <MonoGameMGCBAdditionalArguments Condition="'$(MonoGameMGCBAdditionalArguments)' == ''">/quiet</MonoGameMGCBAdditionalArguments>
@@ -211,9 +211,9 @@
       Include="%(ExtraContent.FullPath)"
       AdditionalMetadata="Link=$(PlatformResourcePrefix)%(ExtraContent.ContentDir)%(ExtraContent.RecursiveDir)%(ExtraContent.Filename)%(ExtraContent.Extension);CopyToOutputDirectory=PreserveNewest"
       Condition="'%(ExtraContent.Filename)' != ''">
-      <Output TaskParameter="Include" ItemName="Content" Condition="'$(MonoGamePlatform)' != 'Android' And '$(MonoGamePlatform)' != 'iOS' And '$(MonoGamePlatform)' != 'iOSMetal' And '$(MonoGamePlatform)' != 'MacOSX' And '$(MonoGamePlatform)' != 'MacOSMetal'" />
+      <Output TaskParameter="Include" ItemName="Content" Condition="'$(MonoGamePlatform)' != 'Android' And '$(MonoGamePlatform)' != 'AndroidVK' And '$(MonoGamePlatform)' != 'iOS' And '$(MonoGamePlatform)' != 'iOSMetal' And '$(MonoGamePlatform)' != 'MacOSX' And '$(MonoGamePlatform)' != 'MacOSMetal'" />
       <Output TaskParameter="Include" ItemName="BundleResource" Condition="'$(MonoGamePlatform)' == 'MacOSX' Or '$(MonoGamePlatform)' == 'MacOSMetal' Or '$(MonoGamePlatform)' == 'iOS' Or '$(MonoGamePlatform)' == 'iOSMetal'" />
-      <Output TaskParameter="Include" ItemName="AndroidAsset" Condition="'$(MonoGamePlatform)' == 'Android'" />
+      <Output TaskParameter="Include" ItemName="AndroidAsset" Condition="'$(MonoGamePlatform)' == 'Android' Or '$(MonoGamePlatform)' == 'AndroidVK'" />
     </CreateItem>
 
   </Target>

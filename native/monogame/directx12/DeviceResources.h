@@ -38,7 +38,7 @@ public:
 #if defined(_GAMING_XBOX)
     void CreateDeviceResources();
 #else
-    void CreateDeviceResources(IDXGIFactory6* factory, IDXGIAdapter1* adapter);
+    void CreateDeviceResources(IDXGIFactory6* factory, IDXGIAdapter1* adapter, D3D_FEATURE_LEVEL minimumFeatureLevel = D3D_FEATURE_LEVEL_11_0);
 #endif
 
     void CreateWindowSizeDependentResources(int width, int height, float r, float g, float b, float a, int msaaCount);

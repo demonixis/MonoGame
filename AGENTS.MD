@@ -70,6 +70,16 @@ Upstream doesn't allow LLM-generated contributions BUT this fork is private and 
   blocking or crashing.
 - Capabilities must be queried from the selected device. Do not advertise a
   format, MSAA level, resource limit, or feature because another backend has it.
+- The experimental OpenXR bridge is additive and backend-neutral at its public
+  surface. It may expose opaque handles, bootstrap Vulkan/DX12/Metal with the
+  runtime-required adapter/device, wrap external color images without owning
+  them, transition them for runtime release, and submit without desktop
+  presentation. Never destroy an OpenXR-owned image from MonoGame.
+- Vulkan OpenXR device creation goes through AOT-safe callbacks and preserves
+  MonoGame's requested extensions/features while accepting the runtime-selected
+  physical device. Metal must use the runtime-returned `MTLDevice` and expose
+  the same queue used by the renderer. WGL/GLX bindings must describe the real
+  SDL window/context, not inferred or temporary handles.
 
 ## Apple Metal backend rules
 
@@ -116,12 +126,13 @@ Upstream doesn't allow LLM-generated contributions BUT this fork is private and 
 
 ## .NET SDK policy
 
-- The general repository CI remains on its established SDK until all existing
-  mobile TFMs can migrate together.
-- Apple Metal projects use a dedicated .NET SDK 10.0.300 lane with roll-forward
-  disabled, workload set 10.0.300, and Xcode 26.3. Update the SDK, workload
-  set, and Xcode pin together rather than independently.
-- Do not add a root `global.json` merely for the Apple preview. Keep SDK pinning
+- The general repository CI and historical Android GLES package remain on their
+  established SDK/TFM until a separately approved repository-wide migration.
+- The native Android Vulkan and Apple Metal preview projects use dedicated .NET
+  SDK 10.0.300 lanes with roll-forward disabled and workload set 10.0.300.
+  Android Vulkan additionally pins NDK 28.2.13676358; Apple Metal pins Xcode
+  26.3. Update each lane's SDK, workload and native toolchain together.
+- Do not add a root `global.json` merely for a preview backend. Keep SDK pinning
   local to the dedicated build lane or helper entrypoint.
 
 ## Change hygiene

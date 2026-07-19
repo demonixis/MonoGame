@@ -238,6 +238,24 @@ public partial class GraphicsDevice
         _currentFrame = -1;
     }
 
+    internal unsafe void OpenXrSubmitWithoutPresent()
+    {
+        if (_currentFrame < 0)
+            return;
+        MGG.GraphicsDevice_SubmitWithoutPresent(Handle);
+        _scissorRectangleDirty = true;
+        _blendFactorDirty = true;
+        _blendStateDirty = true;
+        _pixelShaderDirty = true;
+        _vertexShaderDirty = true;
+        _depthStencilStateDirty = true;
+        _indexBufferDirty = true;
+        _rasterizerStateDirty = true;
+        _vertexBuffersDirty = true;
+        Textures.Dirty();
+        SamplerStates.Dirty();
+    }
+
     private unsafe void PlatformSetViewport(ref Viewport viewport)
     {
         BeginFrame();

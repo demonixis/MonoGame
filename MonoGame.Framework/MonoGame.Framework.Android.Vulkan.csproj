@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-android</TargetFramework>
+    <TargetFramework>net10.0-android</TargetFramework>
     <SupportedOSPlatformVersion>29</SupportedOSPlatformVersion>
     <CheckEolWorkloads>false</CheckEolWorkloads>
     <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
@@ -24,6 +24,10 @@
     <None Include="..\Artifacts\native\mgruntime\androidvk\android-arm64\$(Configuration)\libmgruntime.so"
           Pack="true"
           PackagePath="runtimes/android-arm64/native/libmgruntime.so" />
+    <AndroidNativeLibrary Include="..\Artifacts\native\mgruntime\androidvk\android-arm64\$(Configuration)\libmgruntime.so">
+      <Abi>arm64-v8a</Abi>
+      <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    </AndroidNativeLibrary>
   </ItemGroup>
 
   <ItemGroup>

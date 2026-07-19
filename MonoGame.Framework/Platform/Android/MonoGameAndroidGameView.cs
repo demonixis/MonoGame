@@ -1113,9 +1113,9 @@ namespace Microsoft.Xna.Framework
                     System.Threading.Thread bgThread = new System.Threading.Thread(
                         o =>
                         {
-                            Android.Util.Log.Debug("MonoGame", "Begin reloading graphics content");
+                            global::Android.Util.Log.Debug("MonoGame", "Begin reloading graphics content");
                             Microsoft.Xna.Framework.Content.ContentManager.ReloadGraphicsContent();
-                            Android.Util.Log.Debug("MonoGame", "End reloading graphics content");
+                            global::Android.Util.Log.Debug("MonoGame", "End reloading graphics content");
 
                             // DeviceReset events
                             _game.graphicsDeviceManager.OnDeviceReset(EventArgs.Empty);

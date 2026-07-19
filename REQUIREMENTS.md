@@ -24,6 +24,11 @@ Desktop development is possible from any operating system supporting the above m
 
 MonoGame requires the dotnet workloads for **iOS** or **Android** depending on the target.
 
+The Native Android Vulkan and Apple Metal preview projects specifically require
+.NET SDK and workload set `10.0.300`; the Android Vulkan native build also pins
+Android NDK `28.2.13676358`. This does not retarget the historical Android GLES
+package or the general repository build.
+
 In Visual Studio 2022/2026 you can install both by selecting the ".NET Multi-platform App UI Development" workload.
 For VSCode, Rider or CLI development, you will need to manually install the [DotNet SDK](https://dotnet.microsoft.com/en-us/download) and then install the iOS and/or Android workloads using `dotnet workload install maui ios android` (delete either iOS or Android if you are not intending to use).
 

@@ -19,9 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="bin\**\*" />
+    <Compile Remove="bin/**/*" />
     <Compile Remove="Framework\WindowsDX\**" />
-    <Compile Remove="obj\**\*" />
+    <Compile Remove="obj/**/*" />
+    <Compile Remove="VisionOSInputContract/**/*" />
     <Compile Remove="Properties/**/*" />
     <Compile Remove="Interactive/**/*" />
     <Compile Remove="Runner/iOS/**/*" />
@@ -44,9 +45,9 @@
 
   <ItemGroup>
     <EmbeddedResource Remove="Framework\WindowsDX\**" />
-    <EmbeddedResource Remove="obj\**\*" />
+    <EmbeddedResource Remove="obj/**/*" />
     <None Remove="Framework\WindowsDX\**" />
-    <None Remove="obj\**\*" />
+    <None Remove="obj/**/*" />
   </ItemGroup>
   
   <PropertyGroup>

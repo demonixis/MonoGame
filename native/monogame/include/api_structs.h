@@ -101,6 +101,24 @@ struct MGG_PresentationSurface
     void* Handle;
 };
 
+struct MGG_OpenXrGraphicsBinding
+{
+    mgint Api;
+    void* Instance;
+    void* PhysicalDevice;
+    void* Device;
+    void* Queue;
+    mguint QueueFamilyIndex;
+    mguint QueueIndex;
+    void* NativeWindow;
+    void* Display;
+    void* Context;
+    void* Drawable;
+    void* Visual;
+    void* Configuration;
+    mguint VisualId;
+};
+
 struct MGG_GraphicsDevice_Caps
 {
     mgint MaxTextureSlots;

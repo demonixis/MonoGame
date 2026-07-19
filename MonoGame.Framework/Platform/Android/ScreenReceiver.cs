@@ -11,7 +11,7 @@ namespace Microsoft.Xna.Framework
 		
 		public override void OnReceive(Context context, Intent intent)
 		{
-			Android.Util.Log.Info("MonoGame", intent.Action.ToString());
+			global::Android.Util.Log.Info("MonoGame", intent.Action.ToString());
 			if(intent.Action == Intent.ActionScreenOff)
 			{
                 OnLocked();
@@ -53,4 +53,3 @@ namespace Microsoft.Xna.Framework
         }
     }
 }
-

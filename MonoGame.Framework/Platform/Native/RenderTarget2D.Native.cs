@@ -7,6 +7,25 @@ namespace Microsoft.Xna.Framework.Graphics;
 
 public partial class RenderTarget2D
 {
+    internal unsafe RenderTarget2D(
+        GraphicsDevice graphicsDevice,
+        MGG_Texture* handle,
+        int width,
+        int height,
+        SurfaceFormat format,
+        DepthFormat depthFormat)
+        : base(graphicsDevice, width, height, false, format, SurfaceType.SwapChainRenderTarget, false, 1)
+    {
+        DepthStencilFormat = depthFormat;
+        MultiSampleCount = 0;
+        RenderTargetUsage = RenderTargetUsage.DiscardContents;
+        Handle = handle;
+        Owned = true;
+    }
+
+    internal unsafe void OpenXrPrepareForRuntimeRelease() =>
+        MGG.OpenXR_PrepareForRuntimeRelease(GraphicsDevice.Handle, Handle);
+
     private unsafe void PlatformConstruct(GraphicsDevice graphicsDevice, int width, int height, bool mipMap, DepthFormat preferredDepthFormat, int preferredMultiSampleCount, RenderTargetUsage usage, bool shared)
     {
         Handle = MGG.RenderTarget_Create(

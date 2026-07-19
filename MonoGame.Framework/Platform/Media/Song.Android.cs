@@ -9,27 +9,27 @@ namespace Microsoft.Xna.Framework.Media
 {
     public sealed partial class Song : IEquatable<Song>, IDisposable
     {
-        static Android.Media.MediaPlayer _androidPlayer;
+        static global::Android.Media.MediaPlayer _androidPlayer;
         static Song _playingSong;
 
         private Album album;
         private Artist artist;
         private Genre genre;
         private TimeSpan position;
-        private Android.Net.Uri assetUri;
+        private global::Android.Net.Uri assetUri;
 
-        public Android.Net.Uri AssetUri
+        public global::Android.Net.Uri AssetUri
         {
             get { return this.assetUri; }
         }
 
         static Song()
         {
-            _androidPlayer = new Android.Media.MediaPlayer();
+            _androidPlayer = new global::Android.Media.MediaPlayer();
             _androidPlayer.Completion += AndroidPlayer_Completion;
         }
 
-        internal Song(Album album, Artist artist, Genre genre, string name, TimeSpan duration, Android.Net.Uri assetUri)
+        internal Song(Album album, Artist artist, Genre genre, string name, TimeSpan duration, global::Android.Net.Uri assetUri)
         {
             this.album = album;
             this.artist = artist;
@@ -194,4 +194,3 @@ namespace Microsoft.Xna.Framework.Media
         }
     }
 }
-

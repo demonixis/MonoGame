@@ -36,6 +36,23 @@ using namespace Microsoft::WRL;
 
 bool MGG_EnableDebugLayer = false;
 
+static bool g_openXrD3D12Configured = false;
+static LUID g_openXrAdapterLuid = {};
+static D3D_FEATURE_LEVEL g_openXrMinimumFeatureLevel = D3D_FEATURE_LEVEL_11_0;
+
+void MGG_OpenXR_ConfigureVulkanBootstrap(void*, void*, void*, void*) {}
+
+void MGG_OpenXR_ConfigureDirect3D12Adapter(mglong adapterLuid, mguint minimumFeatureLevel)
+{
+    g_openXrAdapterLuid.LowPart = static_cast<DWORD>(adapterLuid & 0xffffffff);
+    g_openXrAdapterLuid.HighPart = static_cast<LONG>(adapterLuid >> 32);
+    g_openXrMinimumFeatureLevel = static_cast<D3D_FEATURE_LEVEL>(minimumFeatureLevel);
+    g_openXrD3D12Configured = true;
+}
+
+void MGG_OpenXR_ConfigureMetalDevice(void*) {}
+void* MGG_OpenXR_GetVulkanGetInstanceProcAddr() { return nullptr; }
+
 typedef mguint FrameCounter;
 
 static void MGDX_DestroyFrameResources(MGG_GraphicsDevice* device, FrameCounter currentFrame, mgbool free_all);
@@ -365,8 +382,12 @@ MGG_GraphicsSystem* MGG_GraphicsSystem_Create()
 			if (FAILED(adapter1->GetDesc1(&desc)))
 				continue;
 
+			if (g_openXrD3D12Configured &&
+				(desc.AdapterLuid.LowPart != g_openXrAdapterLuid.LowPart || desc.AdapterLuid.HighPart != g_openXrAdapterLuid.HighPart))
+				continue;
+
 			// Check to see if the adapter supports Direct3D 12, but don't create the actual device yet.
-			if (FAILED(D3D12CreateDevice(adapter1.Get(), D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr)))
+			if (FAILED(D3D12CreateDevice(adapter1.Get(), g_openXrMinimumFeatureLevel, __uuidof(ID3D12Device), nullptr)))
 				continue;
 
 			// Keep it!
@@ -501,7 +522,7 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
 #if defined(_GAMING_XBOX)
 	device->resources->CreateDeviceResources();
 #else
-	device->resources->CreateDeviceResources(system->dxgiFactory.Get(), adapter->adapter.Get());
+	device->resources->CreateDeviceResources(system->dxgiFactory.Get(), adapter->adapter.Get(), g_openXrMinimumFeatureLevel);
 #endif
 
 	device->context = device->resources->GetCommandContext();
@@ -775,6 +796,56 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 
 	// This begins the next frame, blocking if necessary.
 	MGDX_PrepareNextFrame(device);
+}
+
+void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device)
+{
+	assert(device != nullptr);
+	assert(device->is_recording);
+
+	device->context->cmd->Close(false);
+	device->context->cmd = nullptr;
+	device->context->Reset();
+	device->pipelineManager->Prepare();
+	device->indexBufferDirty = true;
+	device->vertexBuffersDirty = 0xFFFFFFFF;
+	device->texturesDirty = true;
+	device->samplersDirty = true;
+	device->viewportDirty = true;
+	device->scissorDirty = true;
+}
+
+void MGG_OpenXR_GetGraphicsBinding(MGG_GraphicsDevice* device, MGG_OpenXrGraphicsBinding& binding)
+{
+	memset(&binding, 0, sizeof(binding));
+	if (!device)
+		return;
+	binding.Api = 3;
+	binding.Device = device->resources->GetD3DDevice();
+	binding.Queue = device->resources->GetCommandQueue()->Get();
+}
+
+MGG_Texture* MGG_OpenXR_WrapRenderTarget(MGG_GraphicsDevice* device, void* image, MGSurfaceFormat format, mgint width, mgint height, MGDepthFormat depthFormat)
+{
+	assert(device != nullptr);
+	assert(image != nullptr);
+	auto wrapper = new MGG_Texture();
+	wrapper->format = format;
+	wrapper->texture = new Texture(device->resources, static_cast<ID3D12Resource*>(image), format);
+	if (depthFormat != MGDepthFormat::None)
+	{
+		wrapper->depthTexture = new Texture(width, height, depthFormat);
+		wrapper->depthTexture->Create(device->resources);
+	}
+	return wrapper;
+}
+
+void MGG_OpenXR_PrepareForRuntimeRelease(MGG_GraphicsDevice* device, MGG_Texture* texture)
+{
+	assert(device != nullptr);
+	assert(texture != nullptr);
+	std::vector<D3D12_RESOURCE_BARRIER> barriers;
+	texture->texture->Transition(barriers, device->context->GetCommandList(), D3D12_RESOURCE_STATE_COMMON);
 }
 
 void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, mgfloat factorR, mgfloat factorG, mgfloat factorB, mgfloat factorA)

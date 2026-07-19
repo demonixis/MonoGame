@@ -47,7 +47,7 @@ namespace Microsoft.Xna.Framework
 
         public static event EventHandler Paused;
 
-		public override void OnConfigurationChanged (Android.Content.Res.Configuration newConfig)
+		public override void OnConfigurationChanged (global::Android.Content.Res.Configuration newConfig)
 		{
 			// we need to refresh the viewport here.
 			base.OnConfigurationChanged (newConfig);

@@ -92,6 +92,29 @@ Texture::Texture(DeviceResources* device, IDXGISwapChain3* swapchain, int buffer
 
     impl->m_rtvHandles.push_back(device->GetGraphicsHeaps()->CreateRTVHandle(impl->m_res.Get(), rtvDesc));
 }
+
+Texture::Texture(DeviceResources* device, ID3D12Resource* resource, MGSurfaceFormat format) {
+    impl = new InternalData();
+    impl->m_type = SurfaceType::RenderTarget;
+    impl->m_dimension = TextureDimension::Texture2D;
+    impl->m_currentState = D3D12_RESOURCE_STATE_COMMON;
+    impl->m_depthFormat = MGDepthFormat::None;
+    impl->m_levels = 1;
+    impl->m_res = resource;
+    impl->m_desc = resource->GetDesc();
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = TextureFormatToDXGI_FORMAT(format);
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    impl->m_srvHandle = device->GetGraphicsHeaps()->CreateSRVHandle(resource, srvDesc);
+
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.Format = TextureFormatToDXGI_FORMAT(format);
+    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    impl->m_rtvHandles.push_back(device->GetGraphicsHeaps()->CreateRTVHandle(resource, rtvDesc));
+}
 #endif
 
 Texture::~Texture() {

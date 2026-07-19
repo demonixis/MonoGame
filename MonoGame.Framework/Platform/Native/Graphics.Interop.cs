@@ -66,6 +66,25 @@ internal struct MGG_GraphicsDevice_Caps
     public TextureCompressionCapabilities TextureCompression;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct MGG_OpenXrGraphicsBinding
+{
+    public int Api;
+    public IntPtr Instance;
+    public IntPtr PhysicalDevice;
+    public IntPtr Device;
+    public IntPtr Queue;
+    public uint QueueFamilyIndex;
+    public uint QueueIndex;
+    public IntPtr NativeWindow;
+    public IntPtr Display;
+    public IntPtr Context;
+    public IntPtr Drawable;
+        public IntPtr Visual;
+        public IntPtr Configuration;
+        public uint VisualId;
+}
+
 [Flags]
 internal enum TextureCompressionCapabilities
 {
@@ -201,6 +220,29 @@ internal struct MGG_PresentationSurface
 
 internal static unsafe partial class MGG
 {
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_OpenXR_GetVulkanGetInstanceProcAddr", ExactSpelling = true)]
+    internal static extern IntPtr OpenXR_GetVulkanGetInstanceProcAddr();
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_OpenXR_ConfigureVulkanBootstrap", ExactSpelling = true)]
+    public static extern void OpenXR_ConfigureVulkanBootstrap(IntPtr userData, IntPtr createInstance, IntPtr getPhysicalDevice, IntPtr createDevice);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_OpenXR_ConfigureDirect3D12Adapter", ExactSpelling = true)]
+    public static extern void OpenXR_ConfigureDirect3D12Adapter(long adapterLuid, uint minimumFeatureLevel);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_OpenXR_ConfigureMetalDevice", ExactSpelling = true)]
+    public static extern void OpenXR_ConfigureMetalDevice(IntPtr device);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_OpenXR_GetGraphicsBinding", ExactSpelling = true)]
+    public static extern void OpenXR_GetGraphicsBinding(MGG_GraphicsDevice* device, out MGG_OpenXrGraphicsBinding binding);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_OpenXR_WrapRenderTarget", ExactSpelling = true)]
+    public static extern MGG_Texture* OpenXR_WrapRenderTarget(MGG_GraphicsDevice* device, IntPtr image, SurfaceFormat format, int width, int height, DepthFormat depthFormat);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_OpenXR_PrepareForRuntimeRelease", ExactSpelling = true)]
+    public static extern void OpenXR_PrepareForRuntimeRelease(MGG_GraphicsDevice* device, MGG_Texture* texture);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SubmitWithoutPresent", ExactSpelling = true)]
+    public static extern void GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device);
+
     #region Effect Resources
 
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_EffectResource_GetBytecode", ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]

@@ -25,6 +25,14 @@ struct MGG_Shader;
 struct MGG_InputLayout;
 struct MGG_OcclusionQuery;
 
+MG_EXPORT void MGG_OpenXR_ConfigureVulkanBootstrap(void* userData, void* createInstance, void* getPhysicalDevice, void* createDevice);
+MG_EXPORT void MGG_OpenXR_ConfigureDirect3D12Adapter(mglong adapterLuid, mguint minimumFeatureLevel);
+MG_EXPORT void MGG_OpenXR_ConfigureMetalDevice(void* device);
+MG_EXPORT void* MGG_OpenXR_GetVulkanGetInstanceProcAddr();
+MG_EXPORT void MGG_OpenXR_GetGraphicsBinding(MGG_GraphicsDevice* device, MGG_OpenXrGraphicsBinding& binding);
+MG_EXPORT MGG_Texture* MGG_OpenXR_WrapRenderTarget(MGG_GraphicsDevice* device, void* image, MGSurfaceFormat format, mgint width, mgint height, MGDepthFormat depthFormat);
+MG_EXPORT void MGG_OpenXR_PrepareForRuntimeRelease(MGG_GraphicsDevice* device, MGG_Texture* texture);
+
 MG_EXPORT void MGG_EffectResource_GetBytecode(const char* name, mgbyte*& bytecode, mgint& size);
 MG_EXPORT MGG_GraphicsSystem* MGG_GraphicsSystem_Create();
 MG_EXPORT void MGG_GraphicsSystem_Destroy(MGG_GraphicsSystem* system);
@@ -39,6 +47,7 @@ MG_EXPORT void MGG_GraphicsDevice_ResizeSwapchain(MGG_GraphicsDevice* device, MG
 MG_EXPORT mgint MGG_GraphicsDevice_BeginFrame(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_GraphicsDevice_Clear(MGG_GraphicsDevice* device, MGClearOptions options, Vector4& color, mgfloat depth, mgint stencil);
 MG_EXPORT void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, mgint syncInterval);
+MG_EXPORT void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, mgfloat factorR, mgfloat factorG, mgfloat factorB, mgfloat factorA);
 MG_EXPORT void MGG_GraphicsDevice_SetDepthStencilState(MGG_GraphicsDevice* device, MGG_DepthStencilState* state);
 MG_EXPORT void MGG_GraphicsDevice_SetRasterizerState(MGG_GraphicsDevice* device, MGG_RasterizerState* state);

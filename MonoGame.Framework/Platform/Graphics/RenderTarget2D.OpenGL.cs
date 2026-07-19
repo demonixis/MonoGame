@@ -9,6 +9,25 @@ namespace Microsoft.Xna.Framework.Graphics
 {
     public partial class RenderTarget2D
     {
+        internal RenderTarget2D(
+            GraphicsDevice graphicsDevice,
+            int externalTexture,
+            int width,
+            int height,
+            SurfaceFormat format,
+            DepthFormat depthFormat)
+            : base(graphicsDevice, width, height, false, format, SurfaceType.SwapChainRenderTarget, false, 1)
+        {
+            DepthStencilFormat = depthFormat;
+            MultiSampleCount = 0;
+            RenderTargetUsage = RenderTargetUsage.DiscardContents;
+            glTexture = externalTexture;
+            glTextureOwned = false;
+            glTarget = TextureTarget.Texture2D;
+            Threading.BlockOnUIThread(() => graphicsDevice.PlatformCreateRenderTarget(
+                this, width, height, false, format, depthFormat, 0, RenderTargetUsage.DiscardContents));
+        }
+
         private static Action<RenderTarget2D> DisposeAction =
             (t) => t.GraphicsDevice.PlatformDeleteRenderTarget(t);
 

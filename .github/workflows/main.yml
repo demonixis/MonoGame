@@ -207,7 +207,7 @@ jobs:
     name: android-vulkan-preview
     runs-on: ubuntu-24.04
     env:
-      AndroidVulkanDotnetVersion: 8.0.419
+      AndroidVulkanDotnetVersion: 10.0.300
       AndroidVulkanNdkVersion: 28.2.13676358
       AndroidVulkanPackageVersion: 0.0.0-smoke
     defaults:

@@ -62,7 +62,7 @@ namespace Microsoft.Xna.Framework
             }
             else
             {
-                Android.Graphics.Point p = new Android.Graphics.Point();
+                global::Android.Graphics.Point p = new global::Android.Graphics.Point();
                 activity.WindowManager.DefaultDisplay.GetRealSize(p);
                 size.X = p.X;
                 size.Y = p.Y;
@@ -266,7 +266,7 @@ namespace Microsoft.Xna.Framework
 
                 bool didOrientationChange = false;
                 // Android 2.3 and above support reverse orientations
-                int sdkVer = (int)Android.OS.Build.VERSION.SdkInt;
+                int sdkVer = (int)global::Android.OS.Build.VERSION.SdkInt;
                 if (sdkVer >= 10)
                 {
                     // Check if the requested orientation is supported. Default means all are supported.

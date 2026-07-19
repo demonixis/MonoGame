@@ -12,7 +12,7 @@ pause/resume host remain shared with the GLES package.
 - An `arm64-v8a` device exposing Vulkan 1.1.
 - `VK_KHR_swapchain`, a queue that supports both graphics and presentation,
   and scalar block layout support.
-- .NET 8 with the Android workload for application builds.
+- .NET 10 SDK 10.0.300 with workload set 10.0.300 and the Android workload.
 
 The package manifest declares API 29 and Vulkan 1.1 as required features, so
 Android stores can filter incompatible devices. The first preview contains no
@@ -24,7 +24,7 @@ Reference the Vulkan package instead of the GLES package:
 
 ```xml
 <PropertyGroup>
-  <TargetFramework>net8.0-android</TargetFramework>
+  <TargetFramework>net10.0-android</TargetFramework>
   <SupportedOSPlatformVersion>29</SupportedOSPlatformVersion>
   <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
 </PropertyGroup>
@@ -36,7 +36,11 @@ Reference the Vulkan package instead of the GLES package:
 
 Do not reference `MonoGame.Framework.Android` in the same application. The
 Vulkan package contributes exactly one `arm64-v8a/libmgruntime.so` through its
-transitive build target.
+transitive build target. A direct `ProjectReference` to the framework project is
+also supported: its Android library output carries the same single arm64 runtime.
+A source-reference application must declare the same API 29/Vulkan 1.1 manifest
+requirements itself; the package supplies those declarations through its
+transitive manifest overlay.
 
 Use `AndroidVK` as the MGCB platform:
 
@@ -45,7 +49,9 @@ Use `AndroidVK` as the MGCB platform:
 ```
 
 `AndroidVK` emits MGFX 80 Vulkan shaders while retaining Android asset and
-audio conventions. `Compressed` textures use the ETC family by default; an
+audio conventions. The MonoGame content MSBuild task treats `AndroidVK` as an
+Android target, so built XNB files are emitted as `AndroidAsset` items rather
+than desktop `Content` items. `Compressed` textures use the ETC family by default; an
 opaque ETC1 payload is uploaded through the Vulkan ETC2 RGB format because the
 bitstream is ETC2-compatible, while alpha textures use ETC2/EAC. ASTC is an
 explicit opt-in:
@@ -64,6 +70,7 @@ Install Android NDK `28.2.13676358`. The build helper uses
 
 ```sh
 bash native/monogame/android-vulkan/build-android.sh Release
+dotnet build MonoGame.Framework/MonoGame.Framework.Android.Vulkan.csproj -c Release
 dotnet pack MonoGame.Framework/MonoGame.Framework.Android.Vulkan.csproj -c Release
 ```
 
@@ -73,10 +80,35 @@ The native result is written to:
 Artifacts/native/mgruntime/androidvk/android-arm64/Release/libmgruntime.so
 ```
 
+The managed project targets `net10.0-android`; its source-reference AAR contains
+that native runtime under `jni/arm64-v8a`. `dotnet pack` additionally publishes
+the runtime below `runtimes/android-arm64/native` for package consumers. Do not
+add the same `.so` manually when consuming either form.
+
 The `Build Android Vulkan` build task runs the Vulkan shader build, the NDK
 runtime build, and framework packaging on a Linux x64 Android-workload lane.
 The native target deliberately excludes SDL, GLES, FAudio, MoltenVK, and other
 desktop dependencies.
+
+## Build and deploy a consuming application
+
+Build an APK for direct installation; use an AAB only for store/bundletool
+packaging:
+
+```sh
+dotnet build path/to/Game.Android.Vulkan.csproj -c Release \
+  -p:AndroidPackageFormats=apk -p:RuntimeIdentifier=android-arm64
+
+adb devices
+adb install -r path/to/application-Signed.apk
+adb shell monkey -p your.application.id -c android.intent.category.LAUNCHER 1
+```
+
+An AAB cannot be passed directly to `adb install`. Before launch, audit the APK
+for exactly one `lib/arm64-v8a/libmgruntime.so`, no other ABI, API 29 minimum,
+and the required Vulkan 1.1 feature. Also verify that `AndroidVK` XNB outputs are
+present below the application's Android assets; compiling content without
+packaging it is not a usable player.
 
 ## Runtime behavior and diagnostics
 

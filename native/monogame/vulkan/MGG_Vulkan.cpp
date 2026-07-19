@@ -77,6 +77,36 @@
 // TODO: We should expose this to C# somehow.
 bool MGVK_ValidationEnabled = false;
 
+using MGVK_XrCreateInstance = mgint(*)(void*, const VkInstanceCreateInfo*, VkInstance*, VkResult*);
+using MGVK_XrGetPhysicalDevice = mgint(*)(void*, VkInstance, VkPhysicalDevice*);
+using MGVK_XrCreateDevice = mgint(*)(void*, VkPhysicalDevice, const VkDeviceCreateInfo*, VkDevice*, VkResult*);
+
+struct MGVK_XrBootstrap
+{
+    void* userData = nullptr;
+    MGVK_XrCreateInstance createInstance = nullptr;
+    MGVK_XrGetPhysicalDevice getPhysicalDevice = nullptr;
+    MGVK_XrCreateDevice createDevice = nullptr;
+};
+
+static MGVK_XrBootstrap g_xrBootstrap;
+
+void MGG_OpenXR_ConfigureVulkanBootstrap(void* userData, void* createInstance, void* getPhysicalDevice, void* createDevice)
+{
+    g_xrBootstrap.userData = userData;
+    g_xrBootstrap.createInstance = reinterpret_cast<MGVK_XrCreateInstance>(createInstance);
+    g_xrBootstrap.getPhysicalDevice = reinterpret_cast<MGVK_XrGetPhysicalDevice>(getPhysicalDevice);
+    g_xrBootstrap.createDevice = reinterpret_cast<MGVK_XrCreateDevice>(createDevice);
+}
+
+void MGG_OpenXR_ConfigureDirect3D12Adapter(mglong, mguint) { }
+void MGG_OpenXR_ConfigureMetalDevice(void*) { }
+
+void* MGG_OpenXR_GetVulkanGetInstanceProcAddr()
+{
+    return reinterpret_cast<void*>(vkGetInstanceProcAddr);
+}
+
 
 #if defined(DEBUG)
 template <typename... FmtArgs>
@@ -380,6 +410,7 @@ struct MGG_Texture
 
 	VkImage image = VK_NULL_HANDLE;
 	VmaAllocation allocation = VK_NULL_HANDLE;
+	bool ownsImage = true;
 
 	VkImage msImage = VK_NULL_HANDLE;
 	VmaAllocation msAllocation = VK_NULL_HANDLE;
@@ -1004,7 +1035,17 @@ MGG_GraphicsSystem* MGG_GraphicsSystem_Create()
 
 	VkInstance instance = VK_NULL_HANDLE;
 
-	err = vkCreateInstance(&instance_create_info, nullptr, &instance);
+	if (g_xrBootstrap.createInstance)
+	{
+		VkResult vulkanResult = VK_ERROR_INITIALIZATION_FAILED;
+		auto xrResult = g_xrBootstrap.createInstance(
+			g_xrBootstrap.userData, &instance_create_info, &instance, &vulkanResult);
+		err = xrResult >= 0 ? vulkanResult : VK_ERROR_INITIALIZATION_FAILED;
+	}
+	else
+	{
+		err = vkCreateInstance(&instance_create_info, nullptr, &instance);
+	}
 	if (err != VK_SUCCESS)
 	{
 		printf("Failed to create Vulkan instance!\n");
@@ -1019,8 +1060,27 @@ MGG_GraphicsSystem* MGG_GraphicsSystem_Create()
 	system->instance = instance;
 	system->supportsPhysicalDeviceProperties2EXT = supportsProperties2EXT;
 
-	// Gather the physical devices.
+	// Gather the physical devices. OpenXR chooses the only admissible adapter when attached.
 	{
+		if (g_xrBootstrap.getPhysicalDevice)
+		{
+			VkPhysicalDevice gpu = VK_NULL_HANDLE;
+			auto xrResult = g_xrBootstrap.getPhysicalDevice(g_xrBootstrap.userData, system->instance, &gpu);
+			if (xrResult < 0 || gpu == VK_NULL_HANDLE)
+			{
+				MGG_GraphicsSystem_Destroy(system);
+				return nullptr;
+			}
+
+			auto adapter = new MGG_GraphicsAdapter();
+			adapter->device = gpu;
+			vkGetPhysicalDeviceProperties(adapter->device, &adapter->properties);
+			vkGetPhysicalDeviceFeatures(adapter->device, &adapter->features);
+			vkGetPhysicalDeviceMemoryProperties(adapter->device, &adapter->memory);
+			system->adapters.push_back(adapter);
+			return system;
+		}
+
 		uint32_t count = 0;
 		VkResult res = vkEnumeratePhysicalDevices(system->instance, &count, NULL);
 		if (res == VK_SUCCESS)
@@ -1285,25 +1345,17 @@ static void MGVK_FlushCommands(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 	VkResult res = vkEndCommandBuffer(frame.commandBuffer);
 	VK_CHECK_RESULT(res);
 
-	VkFence renderFence;
-	{
-		VkFenceCreateInfo fenceCreateInfo = {};
-		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		fenceCreateInfo.flags = 0;
-		vkCreateFence(device->device, &fenceCreateInfo, nullptr, &renderFence);
-		VK_SET_OBJECT_NAME(device->device, renderFence, VK_OBJECT_TYPE_FENCE, "MGVK_FlushCommands.renderFence");
-	}
-
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &frame.commandBuffer;
 	{
 		std::lock_guard lock(device->queueMutex);
-		vkQueueSubmit(device->queue, 1, &submitInfo, renderFence);
+		res = vkQueueSubmit(device->queue, 1, &submitInfo, VK_NULL_HANDLE);
+		VK_CHECK_RESULT(res);
+		res = vkQueueWaitIdle(device->queue);
+		VK_CHECK_RESULT(res);
 	}
-	vkWaitForFences(device->device, 1, &renderFence, VK_TRUE, UINT64_MAX);
-	vkDestroyFence(device->device, renderFence, nullptr);
 }
 
 static void MGVK_BufferCreate(MGG_GraphicsDevice* device, int sizeInBytes, VkBufferUsageFlags usage, VmaMemoryUsage flags, MGG_Buffer* buffer)
@@ -1623,7 +1675,22 @@ static MGG_GraphicsDevice* MGVK_GraphicsDevice_Create(
 	deviceCreateInfo.enabledExtensionCount = extensions.size();
 	deviceCreateInfo.ppEnabledExtensionNames = extensions.data();
 
-	auto res = vkCreateDevice(device->physicalDevice, &deviceCreateInfo, NULL, &device->device);
+	VkResult res;
+	if (g_xrBootstrap.createDevice)
+	{
+		VkResult vulkanResult = VK_ERROR_INITIALIZATION_FAILED;
+		auto xrResult = g_xrBootstrap.createDevice(
+			g_xrBootstrap.userData,
+			device->physicalDevice,
+			&deviceCreateInfo,
+			&device->device,
+			&vulkanResult);
+		res = xrResult >= 0 ? vulkanResult : VK_ERROR_INITIALIZATION_FAILED;
+	}
+	else
+	{
+		res = vkCreateDevice(device->physicalDevice, &deviceCreateInfo, NULL, &device->device);
+	}
 	if (res != VK_SUCCESS)
 	{
 		printf("vkCreateDevice failed with VkResult %d.\n", res);
@@ -2812,7 +2879,8 @@ static void MGVK_DestroyFrameResources(MGG_GraphicsDevice* device, FrameCounter 
 				vmaDestroyImage(device->allocator, texture->msImage, texture->msAllocation);
 			}
 
-			vmaDestroyImage(device->allocator, texture->image, texture->allocation);
+			if (texture->ownsImage)
+				vmaDestroyImage(device->allocator, texture->image, texture->allocation);
 			mg_remove(device->all_textures, texture);
 			delete texture;
 		}
@@ -3048,6 +3116,30 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 	// recoverable acquire error can recreate the swapchain and wait for the queue.
 	if (device->swapchain != VK_NULL_HANDLE)
 		MGVK_PrepareFrame(device);
+}
+
+void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device)
+{
+	if (device == nullptr || device->frames.empty() || device->frameIndex >= device->frames.size())
+		return;
+	auto& frame = device->frames[device->frameIndex];
+	if (!frame.is_recording)
+		return;
+
+	MGVK_FlushCommands(device, frame);
+	vkResetCommandBuffer(frame.commandBuffer, 0);
+	VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	auto result = vkBeginCommandBuffer(frame.commandBuffer, &beginInfo);
+	VK_CHECK_RESULT(result);
+	frame.is_recording = true;
+	device->inRenderPass = false;
+	device->renderTargetDirty = true;
+	device->pipelineStateDirty = true;
+	device->scissorDirty = true;
+	device->uniformsDirty = 0xFFFFFFFF;
+	device->textureSamplerDirty = 0xFFFFFFFF;
+	device->vertexBuffersDirty = 0xFFFFFFFF;
 }
 
 void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, mgfloat factorR, mgfloat factorG, mgfloat factorB, mgfloat factorA)
@@ -3487,7 +3579,14 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 			target->depthTexture->frame = currentFrame;
 
 		// Is the layout in the right state?
-		if (!target->isSwapchain && target->layouts[0] != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		// Array and cubemap slices are transitioned by the render pass for the
+		// selected image view.  Transitioning the texture-level layout here would
+		// affect a different slice (historically slice zero) while the attachment
+		// can reference any layer, leaving the cube in mixed, untracked layouts
+		// before mip generation.
+		if (!target->isSwapchain &&
+			!device->targets.arraySlices[i].has_value() &&
+			target->layouts[0] != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 		{
 			VkImageMemoryBarrier b = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 			b.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -5623,7 +5722,11 @@ MGG_Texture* MGG_RenderTarget_Create(
 		create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-		VkImageLayout startLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		// Render passes transition the selected attachment view into the color
+		// layout.  Starting sampled render targets in their resting layout keeps
+		// every cubemap/array layer coherent before the first per-slice pass and
+		// lets mip generation transition all layers from one known state.
+		VkImageLayout startLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		mggCreateImage(device, &create_info, texture);
 		VK_SET_OBJECT_NAME(device->device, texture->image, VK_OBJECT_TYPE_IMAGE, "MGG_Texture.image (RenderTarget id: %llu)", texture->id);
 
@@ -5705,6 +5808,93 @@ MGG_Texture* MGG_RenderTarget_Create(
 	device->all_textures.push_back(texture);
 
 	return texture;
+}
+
+void MGG_OpenXR_GetGraphicsBinding(MGG_GraphicsDevice* device, MGG_OpenXrGraphicsBinding& binding)
+{
+	memset(&binding, 0, sizeof(binding));
+	if (!device)
+		return;
+	binding.Api = 2;
+	binding.Instance = device->instance;
+	binding.PhysicalDevice = device->physicalDevice;
+	binding.Device = device->device;
+	binding.Queue = device->queue;
+	binding.QueueFamilyIndex = device->graphicsQueueFamily;
+	binding.QueueIndex = 0;
+}
+
+MGG_Texture* MGG_OpenXR_WrapRenderTarget(
+	MGG_GraphicsDevice* device,
+	void* image,
+	MGSurfaceFormat format,
+	mgint width,
+	mgint height,
+	MGDepthFormat depthFormat)
+{
+	if (!device || !image || width <= 0 || height <= 0)
+		return nullptr;
+
+	auto texture = new MGG_Texture();
+	texture->isTarget = true;
+	texture->ownsImage = false;
+	texture->type = MGTextureType::_2D;
+	texture->format = format;
+	texture->id = ++device->currentTextureId;
+	texture->depthFormat = depthFormat;
+	texture->usage = MGRenderTargetUsage::DiscardContents;
+	texture->image = reinterpret_cast<VkImage>(image);
+	texture->info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	texture->info.imageType = VK_IMAGE_TYPE_2D;
+	texture->info.format = ToVkFormat(format);
+	texture->info.extent = { static_cast<mguint>(width), static_cast<mguint>(height), 1 };
+	texture->info.mipLevels = 1;
+	texture->info.arrayLayers = 1;
+	texture->info.samples = VK_SAMPLE_COUNT_1_BIT;
+	texture->info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	texture->layouts[0] = VK_IMAGE_LAYOUT_UNDEFINED;
+	texture->optimal_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	texture->view = CreateImageView(device, texture, 1);
+	texture->target_view = CreateImageView(device, texture, 1);
+
+	if (depthFormat != MGDepthFormat::None)
+	{
+		auto selectedDepthFormat = MGVK_SelectDepthFormat(device, depthFormat);
+		if (selectedDepthFormat == VK_FORMAT_UNDEFINED)
+		{
+			vkDestroyImageView(device->device, texture->target_view, nullptr);
+			vkDestroyImageView(device->device, texture->view, nullptr);
+			delete texture;
+			return nullptr;
+		}
+		texture->depthTexture = CreateDepthTexture(device, selectedDepthFormat, width, height, 0);
+		texture->depthTexture->target_view = CreateImageView(device, texture->depthTexture, 1);
+	}
+
+	device->all_textures.push_back(texture);
+	return texture;
+}
+
+void MGG_OpenXR_PrepareForRuntimeRelease(MGG_GraphicsDevice* device, MGG_Texture* texture)
+{
+	if (!device || !texture || device->frames.empty() || device->frameIndex >= device->frames.size())
+		return;
+	auto& frame = device->frames[device->frameIndex];
+	if (!frame.is_recording)
+		return;
+	MGVK_EndRenderPass(device, frame.commandBuffer);
+	auto oldLayout = texture->layouts[0];
+	if (oldLayout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+	{
+		MGVK_CmdTransitionImageLayout(
+			frame.commandBuffer,
+			texture->image,
+			oldLayout,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_ASPECT_COLOR_BIT);
+		texture->layouts[0] = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	}
 }
 
 void MGG_Texture_Destroy(MGG_GraphicsDevice* device, MGG_Texture* texture)

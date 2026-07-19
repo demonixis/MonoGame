@@ -40,7 +40,7 @@ namespace Microsoft.Xna.Framework.Media
 #if IOS && !TVOS
         private MPMediaItemArtwork thumbnail;
 #elif ANDROID
-        private Android.Net.Uri thumbnail;
+        private global::Android.Net.Uri thumbnail;
 #endif
 
         /// <summary>
@@ -144,7 +144,7 @@ namespace Microsoft.Xna.Framework.Media
             this.thumbnail = thumbnail;
         }
 #elif ANDROID
-        internal Album(SongCollection songCollection, string name, Artist artist, Genre genre, Android.Net.Uri thumbnail)
+        internal Album(SongCollection songCollection, string name, Artist artist, Genre genre, global::Android.Net.Uri thumbnail)
             : this(songCollection, name, artist, genre)
         {
             this.thumbnail = thumbnail;

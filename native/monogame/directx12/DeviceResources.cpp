@@ -141,7 +141,7 @@ public:
 #if defined(_GAMING_XBOX)
     void CreateDeviceResources(DeviceResources* device)
 #else
-    void CreateDeviceResources(DeviceResources* device, IDXGIFactory6* factory, IDXGIAdapter1* adapter)        
+    void CreateDeviceResources(DeviceResources* device, IDXGIFactory6* factory, IDXGIAdapter1* adapter, D3D_FEATURE_LEVEL minimumFeatureLevel)
 #endif
     {
 #if defined(_GAMING_XBOX)
@@ -211,7 +211,7 @@ public:
         HRESULT hr;
         hr = D3D12CreateDevice(
             adapter,
-            D3D_FEATURE_LEVEL_11_0,
+            minimumFeatureLevel,
             IID_PPV_ARGS(m_d3dDevice.ReleaseAndGetAddressOf())
         );
         ThrowIfFailed(hr);
@@ -643,9 +643,9 @@ void DeviceResources::CreateDeviceResources()
     pImpl->CreateDeviceResources(this);
 }
 #else
-void DeviceResources::CreateDeviceResources(IDXGIFactory6* factory, IDXGIAdapter1* adapter)
+void DeviceResources::CreateDeviceResources(IDXGIFactory6* factory, IDXGIAdapter1* adapter, D3D_FEATURE_LEVEL minimumFeatureLevel)
 {
-    pImpl->CreateDeviceResources(this, factory, adapter);
+    pImpl->CreateDeviceResources(this, factory, adapter, minimumFeatureLevel);
 }
 #endif
 
