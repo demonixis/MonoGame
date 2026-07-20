@@ -17,6 +17,8 @@ namespace Microsoft.Xna.Framework
     {
         private readonly iOSGamePlatform _platform;
         private bool _isDisposed;
+        private int _drawableWidth;
+        private int _drawableHeight;
 
         public iOSGameView(iOSGamePlatform platform, CGRect frame)
             : base(frame)
@@ -86,13 +88,21 @@ namespace Microsoft.Xna.Framework
             var presentation = service.GraphicsDevice.PresentationParameters;
             var width = (int)Math.Round(MetalLayer.DrawableSize.Width);
             var height = (int)Math.Round(MetalLayer.DrawableSize.Height);
+            var drawableSizeChanged = width != _drawableWidth || height != _drawableHeight;
+            _drawableWidth = width;
+            _drawableHeight = height;
             if (presentation.BackBufferWidth == width && presentation.BackBufferHeight == height)
+            {
+                if (drawableSizeChanged)
+                    _platform.Game.Window.OnClientSizeChanged();
                 return;
+            }
 
             presentation.BackBufferWidth = width;
             presentation.BackBufferHeight = height;
             presentation.DeviceWindowHandle = MetalLayer.Handle;
             service.GraphicsDevice.Reset(presentation);
+            _platform.Game.Window.OnClientSizeChanged();
         }
 
         protected override void Dispose(bool disposing)

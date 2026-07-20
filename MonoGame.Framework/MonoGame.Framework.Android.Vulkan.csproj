@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0-android</TargetFramework>
+    <TargetPlatformVersion>36.0</TargetPlatformVersion>
     <SupportedOSPlatformVersion>29</SupportedOSPlatformVersion>
     <CheckEolWorkloads>false</CheckEolWorkloads>
     <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
@@ -16,15 +17,21 @@
     <PackageReadmeFile>README-packages.md</PackageReadmeFile>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <AndroidVulkanNativeConfiguration Condition="'$(AndroidVulkanNativeConfiguration)' == '' and Exists('..\Artifacts\native\mgruntime\androidvk\android-arm64\$(Configuration)\libmgruntime.so')">$(Configuration)</AndroidVulkanNativeConfiguration>
+    <AndroidVulkanNativeConfiguration Condition="'$(AndroidVulkanNativeConfiguration)' == ''">Release</AndroidVulkanNativeConfiguration>
+    <AndroidVulkanNativeArtifact>..\Artifacts\native\mgruntime\androidvk\android-arm64\$(AndroidVulkanNativeConfiguration)\libmgruntime.so</AndroidVulkanNativeArtifact>
+  </PropertyGroup>
+
   <Import Project="MonoGame.Framework.Native.Graphics.targets" />
 
   <ItemGroup>
     <None Include="..\README-packages.md" Pack="true" PackagePath="\"/>
     <None Include="MonoGame.Framework.Android.Vulkan.targets" Pack="true" PackagePath="buildTransitive" />
-    <None Include="..\Artifacts\native\mgruntime\androidvk\android-arm64\$(Configuration)\libmgruntime.so"
+    <None Include="$(AndroidVulkanNativeArtifact)"
           Pack="true"
           PackagePath="runtimes/android-arm64/native/libmgruntime.so" />
-    <AndroidNativeLibrary Include="..\Artifacts\native\mgruntime\androidvk\android-arm64\$(Configuration)\libmgruntime.so">
+    <AndroidNativeLibrary Include="$(AndroidVulkanNativeArtifact)">
       <Abi>arm64-v8a</Abi>
       <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
     </AndroidNativeLibrary>
@@ -93,4 +100,9 @@
 
   <Import Project="Platform\OpenAL.targets" />
   <Import Project="MonoGame.Framework.Devices.Sensors.targets" />
+
+  <Target Name="ValidateAndroidVulkanNativeArtifact" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(AndroidVulkanNativeArtifact)')"
+           Text="The Android Vulkan native runtime was not found at '$(AndroidVulkanNativeArtifact)'. Run native/monogame/android-vulkan/build-android.sh $(AndroidVulkanNativeConfiguration) before building this project." />
+  </Target>
 </Project>

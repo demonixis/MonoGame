@@ -2609,7 +2609,7 @@ bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 	{
 		res = vkAcquireNextImageKHR(device->device, device->swapchain, UINT64_MAX,
 			frame.imageAcquiredSemaphore, VK_NULL_HANDLE, &frame.image_index);
-		if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
+		if (res == VK_ERROR_OUT_OF_DATE_KHR)
 		{
 			frame.image_index = -1;
 			MGVK_RecreateSwapChain(device);
@@ -2620,7 +2620,11 @@ bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 			MGG_GraphicsDevice_SuspendPresentation(device);
 			return false;
 		}
-		if (res != VK_SUCCESS)
+		// VK_SUBOPTIMAL_KHR still returns a valid acquired image.  This commonly
+		// happens while SDL/Cocoa is applying the initial window size; abandoning
+		// it here leaves the window permanently black because no frame is ever
+		// submitted for presentation.
+		if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR)
 		{
 			printf("vkAcquireNextImageKHR failed with VkResult %d.\n", res);
 			return false;
@@ -3886,7 +3890,11 @@ static void MGVK_FillDescriptorSetCache(MGG_GraphicsDevice* device, MGG_Shader* 
 static void MGVK_UpdateDescriptors(MGG_GraphicsDevice* device, FrameCounter currentFrame, MGG_Shader* shader, VkDescriptorSet* current, uint32_t* dynamicOffset)
 {
 	// If nothing is dirty then skip the update.
-	if ((device->uniformsDirty & shader->uniformSlots) == 0 &&
+	// uniformsDirty is indexed by shader stage while uniformSlots is indexed by
+	// constant-buffer binding.  Comparing those masks caused pixel-only constant
+	// updates to be skipped whenever the shader used binding zero.
+	const uint32_t shaderStageMask = 1u << (uint32_t)shader->stage;
+	if ((device->uniformsDirty & shaderStageMask) == 0 &&
 		(device->textureSamplerDirty & shader->textureSlots) == 0 &&
 		(device->textureSamplerDirty & shader->samplerSlots) == 0)
 		return;
