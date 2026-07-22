@@ -1,5 +1,15 @@
 ﻿# Changelog
 
+## Unreleased
+
+### Changed
+
+- The C3DE source-reference Android GLES and iOS OpenGL framework heads now target .NET 10 with explicit Android API 36/API 23+ and Apple SDK 26.2 contracts.
+
+### Fixed
+
+- Mobile OpenGL builds no longer select the SDL-only OpenXR interop branch, Android logging binds the platform namespace explicitly, and platform-specific intermediate paths cannot leak generated `obj`/`bin` sources into sibling heads.
+
 ## 3.8.4 Release - April 2nd - 2025
 
 Fastest MonoGame release to date!  WIth a total of 7 Previews, all vetted by the community.

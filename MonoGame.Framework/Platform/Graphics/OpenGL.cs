@@ -1442,9 +1442,9 @@ namespace MonoGame.OpenGL
         static void LogExtensions()
         {
 #if __ANDROID__
-            Android.Util.Log.Verbose("GL","Supported Extensions");
+            global::Android.Util.Log.Verbose("GL","Supported Extensions");
             foreach (var ext in Extensions)
-                Android.Util.Log.Verbose("GL", "   " + ext);
+                global::Android.Util.Log.Verbose("GL", "   " + ext);
 #endif
         }
 
@@ -1724,4 +1724,3 @@ namespace MonoGame.OpenGL
         }
     }
 }
-

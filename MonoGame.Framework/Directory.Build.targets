@@ -1,0 +1,14 @@
+<Project>
+
+  <!-- Platform-specific BaseIntermediateOutputPath values make the SDK's ambient obj/bin
+       exclusions too narrow for sibling heads and explicitly linked third-party sources. -->
+  <ItemGroup>
+    <Compile Remove="$(MSBuildProjectDirectory)/obj/**/*.cs" />
+    <Compile Remove="$(MSBuildProjectDirectory)/bin/**/*.cs" />
+    <Compile Remove="$(MSBuildThisFileDirectory)../ThirdParty/StbImageSharp/src/obj/**/*.cs" />
+    <Compile Remove="$(MSBuildThisFileDirectory)../ThirdParty/StbImageSharp/src/bin/**/*.cs" />
+    <Compile Remove="$(MSBuildThisFileDirectory)../ThirdParty/StbImageWriteSharp/src/obj/**/*.cs" />
+    <Compile Remove="$(MSBuildThisFileDirectory)../ThirdParty/StbImageWriteSharp/src/bin/**/*.cs" />
+  </ItemGroup>
+
+</Project>

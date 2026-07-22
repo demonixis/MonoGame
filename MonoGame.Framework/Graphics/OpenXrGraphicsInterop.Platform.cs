@@ -5,7 +5,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-#if OPENGL
+#if DESKTOPGL
 using Microsoft.Xna.Framework;
 using MonoGame.OpenGL;
 #elif NATIVE || NATIVE_GRAPHICS
@@ -82,7 +82,7 @@ public static partial class OpenXrGraphicsInterop
 
     private static partial void PlatformPrepareForRuntimeRelease(RenderTarget2D renderTarget) =>
         renderTarget.OpenXrPrepareForRuntimeRelease();
-#elif OPENGL
+#elif DESKTOPGL
     private static partial void PlatformConfigureVulkanBootstrap(IntPtr userData, IntPtr createInstance, IntPtr getPhysicalDevice, IntPtr createDevice) =>
         throw new PlatformNotSupportedException("Vulkan bootstrap is unavailable in a DesktopGL build.");
 

@@ -908,6 +908,7 @@ namespace Microsoft.Xna.Framework.Graphics
                 case SurfaceFormat.Bgr32:
                 case SurfaceFormat.Bgr32SRgb:
                     return 4;
+                case SurfaceFormat.HdrBlendable:
                 case SurfaceFormat.HalfVector4:
                 case SurfaceFormat.Rgba64:
                 case SurfaceFormat.Vector2:
@@ -1053,7 +1054,7 @@ namespace Microsoft.Xna.Framework.Graphics
             {
 #if ANDROID
                 // Todo: Add generic MonoGame logging interface
-                Android.Util.Log.Debug("MonoGame", "MonoGameGLException at " + location + " - " + ex.Message);
+                global::Android.Util.Log.Debug("MonoGame", "MonoGameGLException at " + location + " - " + ex.Message);
 #else
                 Debug.WriteLine("MonoGameGLException at " + location + " - " + ex.Message);
 #endif
