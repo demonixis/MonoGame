@@ -4,6 +4,7 @@
 
 namespace MonoGame.Framework.Utilities;
 
+#if NATIVE_OPENGL
 public static partial class PlatformInfo
 {
     private static MonoGamePlatform PlatformGetMonoGamePlatform()
@@ -22,3 +23,4 @@ public static partial class PlatformInfo
         return GraphicsBackend.OpenGL;
     }
 }
+#endif

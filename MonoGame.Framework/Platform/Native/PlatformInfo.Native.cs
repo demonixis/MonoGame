@@ -8,6 +8,7 @@ namespace MonoGame.Framework.Utilities;
 
 public static partial class PlatformInfo
 {
+#if !NATIVE_OPENGL
     static readonly MonoGamePlatform _platform = MGP.Platform_GetPlatform();
     static readonly GraphicsBackend _graphics = MGP.Platform_GetGraphicsBackend();
 
@@ -20,4 +21,5 @@ public static partial class PlatformInfo
     {
         return _graphics;
     }
+#endif
 }

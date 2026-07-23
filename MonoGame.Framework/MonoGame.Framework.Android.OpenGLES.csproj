@@ -7,7 +7,7 @@
     <CheckEolWorkloads>false</CheckEolWorkloads>
     <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
     <AndroidManifest>Platform/Android/AndroidManifest.NativeOpenGLES.xml</AndroidManifest>
-    <DefineConstants>ANDROID;NATIVE_GLES;NATIVE_GRAPHICS;STBSHARP_INTERNAL</DefineConstants>
+    <DefineConstants>ANDROID;NATIVE_GLES;NATIVE_GRAPHICS;NATIVE_OPENGL;STBSHARP_INTERNAL</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Description>The MonoGame runtime for Android ARM64 using strict Native OpenGL ES 3.0.</Description>
     <PackageTags>monogame;android;opengles;native</PackageTags>

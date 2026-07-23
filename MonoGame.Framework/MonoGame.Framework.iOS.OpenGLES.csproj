@@ -4,7 +4,7 @@
     <TargetFramework>net10.0-ios</TargetFramework>
     <TargetPlatformVersion>26.2</TargetPlatformVersion>
     <SupportedOSPlatformVersion>12.0</SupportedOSPlatformVersion>
-    <DefineConstants>IOS;NATIVE_GLES;NATIVE_GRAPHICS;STBSHARP_INTERNAL</DefineConstants>
+    <DefineConstants>IOS;NATIVE_GLES;NATIVE_GRAPHICS;NATIVE_OPENGL;STBSHARP_INTERNAL</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Description>The MonoGame runtime for iOS and iPadOS using strict Native OpenGL ES 3.0.</Description>
     <PackageTags>monogame;ios;opengles;native</PackageTags>
