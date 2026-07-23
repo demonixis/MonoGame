@@ -36,6 +36,39 @@
     <PackageReference Include="SharpDX" Version="4.0.1" />
     <PackageReference Include="SharpDX.D3DCompiler" Version="4.0.1" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\Artifacts\native\mgfx-spvc\windows\x64\$(Configuration)\mgfx-spvc.exe" Condition="Exists('..\..\Artifacts\native\mgfx-spvc\windows\x64\$(Configuration)\mgfx-spvc.exe')" Visible="false">
+      <Link>runtimes\win-x64\native\mgfx-spvc.exe</Link>
+      <PackagePath>tools\net8.0\any\runtimes\win-x64\native</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\Artifacts\native\mgfx-spvc\windows\arm64\$(Configuration)\mgfx-spvc.exe" Condition="Exists('..\..\Artifacts\native\mgfx-spvc\windows\arm64\$(Configuration)\mgfx-spvc.exe')" Visible="false">
+      <Link>runtimes\win-arm64\native\mgfx-spvc.exe</Link>
+      <PackagePath>tools\net8.0\any\runtimes\win-arm64\native</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\Artifacts\native\mgfx-spvc\linux\x64\$(Configuration)\mgfx-spvc" Condition="Exists('..\..\Artifacts\native\mgfx-spvc\linux\x64\$(Configuration)\mgfx-spvc')" Visible="false">
+      <Link>runtimes\linux-x64\native\mgfx-spvc</Link>
+      <PackagePath>tools\net8.0\any\runtimes\linux-x64\native</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\Artifacts\native\mgfx-spvc\linux\arm64\$(Configuration)\mgfx-spvc" Condition="Exists('..\..\Artifacts\native\mgfx-spvc\linux\arm64\$(Configuration)\mgfx-spvc')" Visible="false">
+      <Link>runtimes\linux-arm64\native\mgfx-spvc</Link>
+      <PackagePath>tools\net8.0\any\runtimes\linux-arm64\native</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc" Condition="Exists('..\..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc')" Visible="false">
+      <Link>runtimes\osx-x64\native\mgfx-spvc</Link>
+      <PackagePath>tools\net8.0\any\runtimes\osx-x64\native</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc" Condition="Exists('..\..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc')" Visible="false">
+      <Link>runtimes\osx-arm64\native\mgfx-spvc</Link>
+      <PackagePath>tools\net8.0\any\runtimes\osx-arm64\native</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
   
   <Import Project="..\..\external\CppNet\CppNet.targets" />
 

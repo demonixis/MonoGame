@@ -276,6 +276,8 @@ MGMonoGamePlatform MGP_Platform_GetPlatform()
 {
 #if MG_METAL
     return MGMonoGamePlatform::MacOS;
+#elif MG_OPENGL
+    return MGMonoGamePlatform::DesktopGL;
 #elif MG_VULKAN
     return MGMonoGamePlatform::DesktopVK;
 #elif MG_DIRECTX12
@@ -290,6 +292,8 @@ MGGraphicsBackend MGP_Platform_GetGraphicsBackend()
 {
 #if MG_METAL
     return MGGraphicsBackend::Metal;
+#elif MG_OPENGL
+    return MGGraphicsBackend::OpenGL;
 #elif MG_VULKAN
     return MGGraphicsBackend::Vulkan;
 #elif MG_DIRECTX12
@@ -737,6 +741,14 @@ MGP_Window* MGP_Window_Create(
 
 #if defined(MG_METAL)
 	flags |= SDL_WINDOW_METAL;
+#elif defined(MG_OPENGL)
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+	flags |= SDL_WINDOW_OPENGL;
 #elif defined(MG_VULKAN) || defined(MG_DIRECTX12)
 	flags |= SDL_WINDOW_VULKAN;
 #else

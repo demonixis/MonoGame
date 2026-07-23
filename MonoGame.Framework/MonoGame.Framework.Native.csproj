@@ -24,6 +24,7 @@
     <Compile Remove="Properties\**\*" />
     <Compile Remove="Utilities\System.Numerics.Vectors\**\*" />
     <Compile Include="Platform\Native\**\*" Exclude="@(MonoGameNativeGraphicsSource)" />
+    <Compile Remove="Platform\Native\PlatformInfo.NativeOpenGL.cs" />
     <Compile Include="@(MonoGameNativeGraphicsSource)" />
     <Compile Include="Platform\Utilities\ReflectionHelpers.Default.cs" />
     <Compile Remove="Devices\**\*" />
@@ -39,8 +40,8 @@
         backend doesn't use it to load or save textures.
   -->
   <ItemGroup>
-    <Compile Include="..\ThirdParty\StbImageSharp\src\**\*.cs" LinkBase="Utilities\StbImageSharp" />
-	<Compile Include="..\ThirdParty\StbImageWriteSharp\src\**\*.cs" LinkBase="Utilities\StbImageWriteSharp" />
+    <Compile Include="..\ThirdParty\StbImageSharp\src\**\*.cs" Exclude="..\ThirdParty\StbImageSharp\src\bin\**\*.cs;..\ThirdParty\StbImageSharp\src\obj\**\*.cs" LinkBase="Utilities\StbImageSharp" />
+	<Compile Include="..\ThirdParty\StbImageWriteSharp\src\**\*.cs" Exclude="..\ThirdParty\StbImageWriteSharp\src\bin\**\*.cs;..\ThirdParty\StbImageWriteSharp\src\obj\**\*.cs" LinkBase="Utilities\StbImageWriteSharp" />
   </ItemGroup>
 
   <ItemGroup>

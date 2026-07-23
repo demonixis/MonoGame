@@ -12,27 +12,27 @@
 #include "api_structs.h"
 
 
+struct MGG_GraphicsDevice;
+struct MGG_Texture;
 struct MGG_GraphicsSystem;
 struct MGG_GraphicsAdapter;
-struct MGG_GraphicsDevice;
 struct MGG_BlendState;
 struct MGG_DepthStencilState;
 struct MGG_RasterizerState;
 struct MGG_Buffer;
-struct MGG_Texture;
 struct MGG_SamplerState;
 struct MGG_Shader;
 struct MGG_InputLayout;
 struct MGG_OcclusionQuery;
 
+MG_EXPORT void* MGG_OpenXR_GetVulkanGetInstanceProcAddr();
 MG_EXPORT void MGG_OpenXR_ConfigureVulkanBootstrap(void* userData, void* createInstance, void* getPhysicalDevice, void* createDevice);
 MG_EXPORT void MGG_OpenXR_ConfigureDirect3D12Adapter(mglong adapterLuid, mguint minimumFeatureLevel);
 MG_EXPORT void MGG_OpenXR_ConfigureMetalDevice(void* device);
-MG_EXPORT void* MGG_OpenXR_GetVulkanGetInstanceProcAddr();
 MG_EXPORT void MGG_OpenXR_GetGraphicsBinding(MGG_GraphicsDevice* device, MGG_OpenXrGraphicsBinding& binding);
 MG_EXPORT MGG_Texture* MGG_OpenXR_WrapRenderTarget(MGG_GraphicsDevice* device, void* image, MGSurfaceFormat format, mgint width, mgint height, MGDepthFormat depthFormat);
 MG_EXPORT void MGG_OpenXR_PrepareForRuntimeRelease(MGG_GraphicsDevice* device, MGG_Texture* texture);
-
+MG_EXPORT void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_EffectResource_GetBytecode(const char* name, mgbyte*& bytecode, mgint& size);
 MG_EXPORT MGG_GraphicsSystem* MGG_GraphicsSystem_Create();
 MG_EXPORT void MGG_GraphicsSystem_Destroy(MGG_GraphicsSystem* system);
@@ -43,11 +43,11 @@ MG_EXPORT MGG_GraphicsDevice* MGG_GraphicsDevice_CreateWithSurface(MGG_GraphicsS
 MG_EXPORT void MGG_GraphicsDevice_Destroy(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_GraphicsDevice_SuspendPresentation(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_Caps& caps);
+MG_EXPORT MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(MGG_GraphicsDevice* device, MGG_GraphicsDevice_CapsV2& caps, mguint capsSize);
 MG_EXPORT void MGG_GraphicsDevice_ResizeSwapchain(MGG_GraphicsDevice* device, MGG_PresentationSurface& surface, mgint width, mgint height, MGSurfaceFormat color, MGDepthFormat depth, mgint multiSampleCount, mgint syncInterval);
 MG_EXPORT mgint MGG_GraphicsDevice_BeginFrame(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_GraphicsDevice_Clear(MGG_GraphicsDevice* device, MGClearOptions options, Vector4& color, mgfloat depth, mgint stencil);
 MG_EXPORT void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, mgint syncInterval);
-MG_EXPORT void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, mgfloat factorR, mgfloat factorG, mgfloat factorB, mgfloat factorA);
 MG_EXPORT void MGG_GraphicsDevice_SetDepthStencilState(MGG_GraphicsDevice* device, MGG_DepthStencilState* state);
 MG_EXPORT void MGG_GraphicsDevice_SetRasterizerState(MGG_GraphicsDevice* device, MGG_RasterizerState* state);
@@ -55,6 +55,7 @@ MG_EXPORT void MGG_GraphicsDevice_GetTitleSafeArea(mgint& x, mgint& y, mgint& wi
 MG_EXPORT void MGG_GraphicsDevice_SetViewport(MGG_GraphicsDevice* device, mgint x, mgint y, mgint width, mgint height, mgfloat minDepth, mgfloat maxDepth);
 MG_EXPORT void MGG_GraphicsDevice_SetScissorRectangle(MGG_GraphicsDevice* device, mgint x, mgint y, mgint width, mgint height);
 MG_EXPORT void MGG_GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture** targets, mgint* arraySlices, mgint count);
+MG_EXPORT MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderTargetsV2(MGG_GraphicsDevice* device, MGG_Texture** targets, mgint* arraySlices, mgint count);
 MG_EXPORT void MGG_GraphicsDevice_SetConstantBuffer(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_Buffer* buffer);
 MG_EXPORT void MGG_GraphicsDevice_SetTexture(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_Texture* texture);
 MG_EXPORT void MGG_GraphicsDevice_SetSamplerState(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_SamplerState* state);

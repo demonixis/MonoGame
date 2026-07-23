@@ -115,7 +115,22 @@ namespace Microsoft.Xna.Framework.Content.Pipeline
         /// <summary>
         /// Android-based devices using Vulkan.
         /// </summary>
-        AndroidVK = 18
+        AndroidVK = 18,
+
+        /// <summary>
+        /// Android devices using the additive Native OpenGL ES 3.0 backend.
+        /// </summary>
+        AndroidNativeGLES = 19,
+
+        /// <summary>
+        /// Apple iOS and iPadOS devices using the additive Native OpenGL ES 3.0 backend.
+        /// </summary>
+        iOSNativeGLES = 20,
+
+        /// <summary>
+        /// Desktop systems using the additive Native OpenGL 4.1 backend.
+        /// </summary>
+        DesktopNativeGL = 21
     }
 
 

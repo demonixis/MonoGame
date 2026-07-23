@@ -114,6 +114,15 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\Artifacts\native\mgfx-spvc\windows\x64\$(Configuration)\mgfx-spvc.exe" Condition="Exists('..\Artifacts\native\mgfx-spvc\windows\x64\$(Configuration)\mgfx-spvc.exe')" Visible="false" Link="runtimes\win-x64\native\mgfx-spvc.exe" PackagePath="runtimes\win-x64\native" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Artifacts\native\mgfx-spvc\windows\arm64\$(Configuration)\mgfx-spvc.exe" Condition="Exists('..\Artifacts\native\mgfx-spvc\windows\arm64\$(Configuration)\mgfx-spvc.exe')" Visible="false" Link="runtimes\win-arm64\native\mgfx-spvc.exe" PackagePath="runtimes\win-arm64\native" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Artifacts\native\mgfx-spvc\linux\x64\$(Configuration)\mgfx-spvc" Condition="Exists('..\Artifacts\native\mgfx-spvc\linux\x64\$(Configuration)\mgfx-spvc')" Visible="false" Link="runtimes\linux-x64\native\mgfx-spvc" PackagePath="runtimes\linux-x64\native" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Artifacts\native\mgfx-spvc\linux\arm64\$(Configuration)\mgfx-spvc" Condition="Exists('..\Artifacts\native\mgfx-spvc\linux\arm64\$(Configuration)\mgfx-spvc')" Visible="false" Link="runtimes\linux-arm64\native\mgfx-spvc" PackagePath="runtimes\linux-arm64\native" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc" Condition="Exists('..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc')" Visible="false" Link="runtimes\osx-x64\native\mgfx-spvc" PackagePath="runtimes\osx-x64\native" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc" Condition="Exists('..\Artifacts\native\mgfx-spvc\macosx\$(Configuration)\mgfx-spvc')" Visible="false" Link="runtimes\osx-arm64\native\mgfx-spvc" PackagePath="runtimes\osx-arm64\native" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <!-- NU5100 - NuGet warns if we copy assemblies but don't reference them; we suppress those warnings. -->
     <!-- CS1591 - Disable XML documentation warnings. -->

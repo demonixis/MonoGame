@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using Microsoft.Xna.Framework.Graphics;
-#if IOS && !METAL
+#if IOS && !METAL && !NATIVE_GLES
 using Foundation;
 using OpenGLES;
 #endif
@@ -56,7 +56,7 @@ namespace Microsoft.Xna.Framework
             }
         }
 
-#if IOS && !METAL
+#if IOS && !METAL && !NATIVE_GLES
         public static EAGLContext BackgroundContext;
 #endif
 
@@ -216,7 +216,7 @@ namespace Microsoft.Xna.Framework
         {
             EnsureUIThread();
 
-#if IOS && !METAL
+#if IOS && !METAL && !NATIVE_GLES
             lock (BackgroundContext)
             {
                 // Make the context current on this thread if it is not already
@@ -239,7 +239,7 @@ namespace Microsoft.Xna.Framework
                 _queuedActions.Clear();
             }
 
-#if IOS && !METAL
+#if IOS && !METAL && !NATIVE_GLES
                 // Must flush the GL calls so the GPU asset is ready for the main context to use it
                 GL.Flush();
                 GraphicsExtensions.CheckGLError();

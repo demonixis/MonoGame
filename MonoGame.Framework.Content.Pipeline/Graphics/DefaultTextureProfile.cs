@@ -15,8 +15,10 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
         {
             return  platform == TargetPlatform.Android ||
                     platform == TargetPlatform.AndroidVK ||
+                    platform == TargetPlatform.AndroidNativeGLES ||
                     platform == TargetPlatform.DesktopGL ||
                     platform == TargetPlatform.DesktopVK ||
+                    platform == TargetPlatform.DesktopNativeGL ||
                     platform == TargetPlatform.MacOSX ||
                     platform == TargetPlatform.MacOSMetal ||
                     platform == TargetPlatform.NativeClient ||
@@ -25,6 +27,7 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
                     platform == TargetPlatform.WindowsDX12 ||
                     platform == TargetPlatform.iOS ||
                     platform == TargetPlatform.iOSMetal ||
+                    platform == TargetPlatform.iOSNativeGLES ||
                     platform == TargetPlatform.Web;
         }
 
@@ -51,11 +54,13 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
             // Select the default texture compression format for the target platform
             if (format == TextureProcessorOutputFormat.Compressed)
             {
-                if (platform == TargetPlatform.iOS)
+                if (platform == TargetPlatform.iOS || platform == TargetPlatform.iOSNativeGLES)
                     format = TextureProcessorOutputFormat.PvrCompressed;
                 else if (platform == TargetPlatform.iOSMetal)
                     format = TextureProcessorOutputFormat.AstcCompressed;
-                else if (platform == TargetPlatform.Android || platform == TargetPlatform.AndroidVK)
+                else if (platform == TargetPlatform.Android ||
+                         platform == TargetPlatform.AndroidVK ||
+                         platform == TargetPlatform.AndroidNativeGLES)
                     format = TextureProcessorOutputFormat.EtcCompressed;
                 else
                     format = TextureProcessorOutputFormat.DxtCompressed;
@@ -64,7 +69,7 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
             if (IsCompressedTextureFormat(format))
             {
                 // Make sure the target platform supports the selected texture compression format
-                if (platform == TargetPlatform.iOS)
+                if (platform == TargetPlatform.iOS || platform == TargetPlatform.iOSNativeGLES)
                 {
                     if (format != TextureProcessorOutputFormat.PvrCompressed)
                         throw new PlatformNotSupportedException("iOS platform only supports PVR texture compression");
@@ -87,10 +92,20 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
                             "Android Vulkan supports ETC2 and ASTC texture compression");
                     }
                 }
+                else if (platform == TargetPlatform.AndroidNativeGLES)
+                {
+                    if (format != TextureProcessorOutputFormat.EtcCompressed &&
+                        format != TextureProcessorOutputFormat.AstcCompressed)
+                    {
+                        throw new PlatformNotSupportedException(
+                            "Android Native OpenGL ES supports ETC2 and ASTC texture compression");
+                    }
+                }
                 else if (   platform == TargetPlatform.Windows ||
                             platform == TargetPlatform.WindowsDX12 ||
                             platform == TargetPlatform.DesktopGL ||
                             platform == TargetPlatform.DesktopVK ||
+                            platform == TargetPlatform.DesktopNativeGL ||
                             platform == TargetPlatform.MacOSX ||
                             platform == TargetPlatform.MacOSMetal ||
                             platform == TargetPlatform.NativeClient ||

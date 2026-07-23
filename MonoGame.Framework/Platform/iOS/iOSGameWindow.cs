@@ -95,6 +95,8 @@ namespace Microsoft.Xna.Framework {
 			get {
 #if METAL
                 return _viewController.View.MetalLayer.Handle;
+#elif NATIVE_GLES
+                return _viewController.View.OpenGlesLayer.Handle;
 #else
 				// TODO: Verify that View.Handle is a sensible
 				//       value to return here.

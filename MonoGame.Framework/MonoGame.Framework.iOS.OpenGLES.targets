@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <MonoGamePlatform>iOSNativeGLES</MonoGamePlatform>
+    <AppBundleExtraOptions>$(AppBundleExtraOptions) -gcc_flags '-framework CoreAudio -framework AudioToolbox -framework OpenGLES -framework QuartzCore'</AppBundleExtraOptions>
+  </PropertyGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <NativeReference Include="$(MSBuildThisFileDirectory)..\runtimes\ios\native\MGOpenGL.xcframework\ios-arm64\libmgruntime.a"
+                     Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>OpenGLES QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+    <NativeReference Include="$(MSBuildThisFileDirectory)..\runtimes\ios\native\MGOpenGL.xcframework\ios-arm64_x86_64-simulator\libmgruntime-simulator.a"
+                     Condition="'$(RuntimeIdentifier)' == 'iossimulator-arm64' or '$(RuntimeIdentifier)' == 'iossimulator-x64'">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>OpenGLES QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+  </ItemGroup>
+</Project>

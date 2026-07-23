@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework.Content.Pipeline;
 using Microsoft.Xna.Framework.Content.Pipeline.Graphics;
@@ -11,6 +12,8 @@ namespace MonoGame.Tests.ContentPipeline
         private readonly TargetPlatform _targetPlatform;
         private readonly string _outputFilename;
         private readonly TestContentBuildLogger _logger;
+
+        public List<string> Dependencies { get; } = new List<string>();
 
         public TestProcessorContext(    TargetPlatform targetPlatform,
                                         string outputFilename)
@@ -73,6 +76,7 @@ namespace MonoGame.Tests.ContentPipeline
 
         public override void AddDependency(string filename)
         {
+            Dependencies.Add(filename);
         }
 
         public override void AddOutputFile(string filename)

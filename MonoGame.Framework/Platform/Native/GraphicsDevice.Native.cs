@@ -37,33 +37,155 @@ public partial class GraphicsDevice
         get; private set;
     }
 
-    private int _maxMultiSampleCount;
+    internal uint NativeCapabilitiesAbiVersion { get; private set; }
 
-    private unsafe void PlatformSetup()
+    internal NativeGraphicsFeatures NativeFeatures { get; private set; }
+
+    internal float NativeMaxAnisotropy { get; private set; }
+
+    internal int NativeApiMajor { get; private set; }
+
+    internal int NativeApiMinor { get; private set; }
+
+    internal int NativeMaxRenderTargets { get; private set; } = 1;
+
+    internal int NativeMaxDrawBuffers { get; private set; } = 1;
+
+    internal int NativeMaxColorAttachments { get; private set; } = 1;
+
+    private void PlatformValidateRenderTargets(RenderTargetBinding[] renderTargets)
     {
-        // Creates the device, but no swap chain yet.
-#if ANDROID && VULKAN
-        var surface = MGG_PresentationSurface.FromAndroidNativeWindow(PresentationParameters.DeviceWindowHandle);
-        Handle = MGG.GraphicsDevice_CreateWithSurface(NativeGraphicsSystem.Handle, Adapter.Handle, ref surface);
-#else
-        Handle = MGG.GraphicsDevice_Create(NativeGraphicsSystem.Handle, Adapter.Handle);
-#endif
-        if (Handle == null)
+        if (renderTargets == null)
+            return;
+
+        var maximum = Math.Min(4, NativeMaxRenderTargets);
+        if (renderTargets.Length > maximum)
+            throw new ArgumentException($"The native graphics backend supports at most {maximum} simultaneous render targets.", nameof(renderTargets));
+
+        if (ShaderProfile != 82 && ShaderProfile != 84)
+            return;
+
+        // The MRT v1 restrictions apply only when several color attachments
+        // are bound.  A single cube face is an existing MonoGame render-target
+        // contract used by reflection probes and sky captures.
+        if (renderTargets.Length == 1)
         {
-            throw new NoSuitableGraphicsDeviceException(
-                "The selected device does not satisfy the Vulkan graphics, presentation, swapchain, and scalar block layout requirements.");
+            var renderTarget = renderTargets[0].RenderTarget;
+            if (renderTarget == null)
+                throw new ArgumentException("The native OpenGL render-target binding must contain a render target.", nameof(renderTargets));
+            if (renderTarget is RenderTarget2D or RenderTargetCube)
+                return;
+            throw new NotSupportedException("Native OpenGL supports a single RenderTarget2D or RenderTargetCube binding.");
         }
 
-        // Get the device caps.
-        MGG_GraphicsDevice_Caps caps;
-        MGG.GraphicsDevice_GetCaps(Handle, out caps);
+        RenderTarget2D first = null;
+        for (var index = 0; index < renderTargets.Length; ++index)
+        {
+            var texture = renderTargets[index].RenderTarget;
+            if (texture == null)
+                throw new ArgumentException("Every native OpenGL render-target binding must contain a render target.", nameof(renderTargets));
+            if (texture is not RenderTarget2D target)
+                throw new NotSupportedException("Native OpenGL MRT v1 supports only RenderTarget2D bindings.");
+            if (target.Format != SurfaceFormat.Color)
+                throw new NotSupportedException("Native OpenGL MRT v1 supports only SurfaceFormat.Color render targets.");
+            if (first != null && (target.Width != first.Width || target.Height != first.Height))
+                throw new ArgumentException("Native OpenGL MRT v1 requires render targets with identical dimensions.", nameof(renderTargets));
 
+            if (target.MultiSampleCount > 1)
+                throw new NotSupportedException("Native OpenGL MRT v1 does not support multisampled render targets.");
+            if (index > 0 && renderTargets[index].DepthFormat != DepthFormat.None)
+                throw new NotSupportedException("Native OpenGL MRT v1 permits a depth attachment only on render target 0.");
+
+            first ??= target;
+        }
+    }
+
+    private bool _supportsNativeGraphicsAbiV2;
+
+    private int _maxMultiSampleCount;
+
+    internal static MGG_GraphicsDevice_CapsV2 CreateLegacyCapabilitiesFallback(MGG_GraphicsDevice_Caps caps)
+    {
+        return new MGG_GraphicsDevice_CapsV2
+        {
+            StructSize = (uint)Marshal.SizeOf<MGG_GraphicsDevice_CapsV2>(),
+            AbiVersion = 0,
+            MaxTextureSlots = caps.MaxTextureSlots,
+            MaxVertexTextureSlots = caps.MaxVertexTextureSlots,
+            MaxVertexBufferSlots = caps.MaxVertexBufferSlots,
+            ShaderProfile = caps.ShaderProfile,
+            MaxMultiSampleCount = caps.MaxMultiSampleCount,
+            TextureCompression = caps.TextureCompression,
+            Features = NativeGraphicsFeatures.None,
+            MaxAnisotropy = 1.0f,
+            MaxRenderTargets = 1,
+            MaxDrawBuffers = 1,
+            MaxColorAttachments = 1,
+        };
+    }
+
+    private void ApplyNativeCapabilities(MGG_GraphicsDevice_CapsV2 caps)
+    {
         MaxTextureSlots = caps.MaxTextureSlots;
         MaxVertexTextureSlots = caps.MaxVertexTextureSlots;
         _maxVertexBufferSlots = caps.MaxVertexBufferSlots;
         ShaderProfile = caps.ShaderProfile;
         _maxMultiSampleCount = caps.MaxMultiSampleCount;
         TextureCompressionCapabilities = caps.TextureCompression;
+        NativeCapabilitiesAbiVersion = caps.AbiVersion;
+        NativeApiMajor = caps.ApiMajor;
+        NativeApiMinor = caps.ApiMinor;
+        NativeFeatures = caps.Features;
+        NativeMaxAnisotropy = caps.MaxAnisotropy;
+        NativeMaxRenderTargets = caps.MaxRenderTargets;
+        NativeMaxDrawBuffers = caps.MaxDrawBuffers;
+        NativeMaxColorAttachments = caps.MaxColorAttachments;
+    }
+
+    private unsafe void PlatformSetup()
+    {
+        // Creates the device, but no swap chain yet.
+#if ANDROID && (VULKAN || NATIVE_GLES)
+        var surface = MGG_PresentationSurface.FromAndroidNativeWindow(PresentationParameters.DeviceWindowHandle);
+        Handle = MGG.GraphicsDevice_CreateWithSurface(NativeGraphicsSystem.Handle, Adapter.Handle, ref surface);
+#elif IOS && NATIVE_GLES
+        var surface = MGG_PresentationSurface.FromOpenGlesLayer(PresentationParameters.DeviceWindowHandle);
+        Handle = MGG.GraphicsDevice_CreateWithSurface(NativeGraphicsSystem.Handle, Adapter.Handle, ref surface);
+#else
+        if (PlatformInfo.GraphicsBackend == GraphicsBackend.OpenGL)
+        {
+            var surface = MGG_PresentationSurface.FromWindowHandle(PresentationParameters.DeviceWindowHandle);
+            Handle = MGG.GraphicsDevice_CreateWithSurface(NativeGraphicsSystem.Handle, Adapter.Handle, ref surface);
+        }
+        else
+            Handle = MGG.GraphicsDevice_Create(NativeGraphicsSystem.Handle, Adapter.Handle);
+#endif
+        if (Handle == null)
+        {
+            throw new NoSuitableGraphicsDeviceException(
+                "The selected native graphics device does not satisfy the requested API and presentation requirements.");
+        }
+
+        // Get the device caps.
+        try
+        {
+            var caps = new MGG_GraphicsDevice_CapsV2
+            {
+                StructSize = (uint)sizeof(MGG_GraphicsDevice_CapsV2),
+            };
+            var status = MGG.GraphicsDevice_GetCapsV2(Handle, ref caps, caps.StructSize);
+            if (status != MonoGame.Interop.GraphicsDeviceStatus.Success)
+                throw new InvalidOperationException($"The native graphics capability query failed with status {status}.");
+
+            ApplyNativeCapabilities(caps);
+            _supportsNativeGraphicsAbiV2 = true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            MGG.GraphicsDevice_GetCaps(Handle, out var caps);
+            ApplyNativeCapabilities(CreateLegacyCapabilitiesFallback(caps));
+            _supportsNativeGraphicsAbiV2 = false;
+        }
         UseHalfPixelOffset = false;
     }
 
@@ -72,10 +194,12 @@ public partial class GraphicsDevice
         PresentationParameters.MultiSampleCount =
                 GetClampedMultisampleCount(PresentationParameters.BackBufferFormat, PresentationParameters.MultiSampleCount);
 
-#if ANDROID && VULKAN
+#if ANDROID && (VULKAN || NATIVE_GLES)
         var surface = MGG_PresentationSurface.FromAndroidNativeWindow(PresentationParameters.DeviceWindowHandle);
 #elif IOS && METAL
         var surface = MGG_PresentationSurface.FromMetalLayer(PresentationParameters.DeviceWindowHandle);
+#elif IOS && NATIVE_GLES
+        var surface = MGG_PresentationSurface.FromOpenGlesLayer(PresentationParameters.DeviceWindowHandle);
 #else
         var surface = MGG_PresentationSurface.FromWindowHandle(PresentationParameters.DeviceWindowHandle);
 #endif
@@ -115,10 +239,12 @@ public partial class GraphicsDevice
         }
 
         // Now resize the back buffer.
-#if ANDROID && VULKAN
+#if ANDROID && (VULKAN || NATIVE_GLES)
         var surface = MGG_PresentationSurface.FromAndroidNativeWindow(PresentationParameters.DeviceWindowHandle);
 #elif IOS && METAL
         var surface = MGG_PresentationSurface.FromMetalLayer(PresentationParameters.DeviceWindowHandle);
+#elif IOS && NATIVE_GLES
+        var surface = MGG_PresentationSurface.FromOpenGlesLayer(PresentationParameters.DeviceWindowHandle);
 #else
         var surface = MGG_PresentationSurface.FromWindowHandle(PresentationParameters.DeviceWindowHandle);
 #endif
@@ -288,7 +414,7 @@ public partial class GraphicsDevice
             PresentationParameters.BackBufferWidth,
             PresentationParameters.BackBufferHeight);
 
-        MGG.GraphicsDevice_SetRenderTargets(Handle, null, null, 0);
+        SetNativeRenderTargets(null, null, 0);
     }
 
     private unsafe void PlatformResolveRenderTargets()
@@ -316,9 +442,45 @@ public partial class GraphicsDevice
 
         fixed (MGG_Texture** targets = _curRenderTargets)
         fixed (int* arraySlices = _currentRenderTargetArraySlices)
-            MGG.GraphicsDevice_SetRenderTargets(Handle, targets, arraySlices, _currentRenderTargetCount);
+            SetNativeRenderTargets(targets, arraySlices, _currentRenderTargetCount);
         
         return first;
+    }
+
+    private unsafe void SetNativeRenderTargets(MGG_Texture** targets, int* arraySlices, int count)
+    {
+        if (!_supportsNativeGraphicsAbiV2)
+        {
+            MGG.GraphicsDevice_SetRenderTargets(Handle, targets, arraySlices, count);
+            return;
+        }
+
+        var status = MGG.GraphicsDevice_SetRenderTargetsV2(Handle, targets, arraySlices, count);
+        ThrowForNativeRenderTargetStatus(status);
+    }
+
+    internal static void ThrowForNativeRenderTargetStatus(MonoGame.Interop.GraphicsDeviceStatus status)
+    {
+        switch (status)
+        {
+            case MonoGame.Interop.GraphicsDeviceStatus.Success:
+                return;
+            case MonoGame.Interop.GraphicsDeviceStatus.InvalidArgument:
+            case MonoGame.Interop.GraphicsDeviceStatus.InvalidRenderTargetCount:
+            case MonoGame.Interop.GraphicsDeviceStatus.InvalidRenderTarget:
+            case MonoGame.Interop.GraphicsDeviceStatus.RenderTargetDimensionsMismatch:
+                throw new ArgumentException($"The native graphics backend rejected the render-target set ({status}).");
+            case MonoGame.Interop.GraphicsDeviceStatus.RenderTargetFormatNotSupported:
+            case MonoGame.Interop.GraphicsDeviceStatus.RenderTargetMultisamplingNotSupported:
+            case MonoGame.Interop.GraphicsDeviceStatus.RenderTargetDepthAttachmentNotSupported:
+            case MonoGame.Interop.GraphicsDeviceStatus.Unsupported:
+                throw new NotSupportedException($"The native graphics backend does not support the render-target set ({status}).");
+            case MonoGame.Interop.GraphicsDeviceStatus.DeviceUnavailable:
+            case MonoGame.Interop.GraphicsDeviceStatus.FramebufferIncomplete:
+                throw new InvalidOperationException($"The native graphics backend could not bind the render-target set ({status}).");
+            default:
+                throw new InvalidOperationException($"The native graphics backend failed to bind render targets ({status}).");
+        }
     }
 
     private void PlatformBeginApplyState()

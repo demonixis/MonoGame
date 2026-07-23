@@ -9,6 +9,18 @@ public sealed class BuildNativeTask : FrostingTask<BuildContext>
     public override void Run(BuildContext context)
     {
         var buildPremake = new BuildPremake();
+        buildPremake.Run(context, "mgpipeline", "native/pipeline", "pipeline.sln");
+
+        // Repack mgfxc now that the host converter exists. The deploy repack
+        // later combines all RID-specific converter artifacts.
+        context.DotNetPack(context.GetProjectPath(ProjectType.Tools, "MonoGame.Effect.Compiler"), context.DotNetPackSettings);
+
+        var stockEffectsResult = context.StartProcess(
+            "bash",
+            new ProcessSettings { Arguments = "scripts/native-opengl/build-stock-effects.sh" });
+        if (stockEffectsResult != 0)
+            throw new Exception($"Native OpenGL stock effect generation failed! {stockEffectsResult}");
+
         buildPremake.Run(context, "mgruntime", "native/monogame", "monogame.sln");
 
         context.DotNetPack(context.GetProjectPath(ProjectType.Framework, "Native"), context.DotNetPackSettings);

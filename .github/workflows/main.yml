@@ -290,6 +290,201 @@ jobs:
             Artifacts/android-vulkan-manifest.txt
             Tests/Artifacts/**/*.apk
 
+  android-native-opengles:
+    name: android-native-opengles-preview
+    runs-on: ubuntu-24.04
+    env:
+      NativeOpenGLDotnetVersion: 10.0.300
+      NativeOpenGLNdkVersion: 28.2.13676358
+      NativeOpenGLPackageVersion: 0.0.0-smoke
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Generate Native OpenGL global.json
+        run: |
+          echo '{ "sdk": { "version": "${{ env.NativeOpenGLDotnetVersion }}", "rollForward": "disable" } }' > global.json
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '${{ env.NativeOpenGLDotnetVersion }}'
+          global-json-file: './global.json'
+
+      - name: Setup Android dependencies
+        uses: monogame/monogame-actions/install-android-dependencies@v1
+
+      - name: Setup Premake5
+        uses: abel0b/setup-premake@v2.4
+        with:
+          version: "5.0.0-beta2"
+
+      - name: Install Android workload and NDK
+        run: |
+          dotnet workload install android --version "${NativeOpenGLDotnetVersion}"
+          sdkmanager "ndk;${NativeOpenGLNdkVersion}"
+
+      - name: Build Native OpenGL converter and stock effects
+        run: |
+          cd native/pipeline
+          premake5 --arch=x64 gmake2
+          make config=release mgfx-spvc
+          cd ../..
+          scripts/native-opengl/build-stock-effects.sh
+
+      - name: Run Native OpenGL content contract tests
+        run: |
+          MGFX_SPVC_PATH="$PWD/Artifacts/native/mgfx-spvc/linux/x64/Release/mgfx-spvc" \
+            dotnet test Tools/MonoGame.Tools.Tests/MonoGame.Tools.Tests.csproj \
+            -c Release --filter FullyQualifiedName~NativeOpenGLProfileTests \
+            --blame-hang-timeout 5m
+
+      - name: Build and pack Android Native OpenGL ES
+        run: |
+          native/monogame/android-opengles/build-android.sh Release
+          dotnet pack MonoGame.Framework/MonoGame.Framework.Android.OpenGLES.csproj \
+            -c Release \
+            -o Artifacts/NuGet \
+            -p:Version="${NativeOpenGLPackageVersion}"
+
+      - name: Audit Android Native OpenGL ES package
+        run: |
+          runtime=Artifacts/native/mgruntime/androidgles/android-arm64/Release/libmgruntime.so
+          package=$(find Artifacts/NuGet -name 'MonoGame.Framework.Android.OpenGLES.*.nupkg' -print -quit)
+          test -n "$package"
+          readelf -h "$runtime"
+          readelf -d "$runtime" | tee Artifacts/android-native-opengles-readelf-dynamic.txt
+          readelf -Ws "$runtime" | tee Artifacts/android-native-opengles-readelf-symbols.txt
+          test "$(unzip -l "$package" | awk '$4 == "runtimes/android-arm64/native/libmgruntime.so" { count++ } END { print count + 0 }')" -eq 1
+          unzip -l "$package" | grep -q 'buildTransitive/MonoGame.Framework.Android.OpenGLES.targets'
+          unzip -l "$package" | grep -q 'buildTransitive/MonoGame.Framework.Android.OpenGLES.AndroidManifest.xml'
+          unzip -p "$package" buildTransitive/MonoGame.Framework.Android.OpenGLES.AndroidManifest.xml | grep -q 'android:minSdkVersion="23"'
+          unzip -p "$package" buildTransitive/MonoGame.Framework.Android.OpenGLES.AndroidManifest.xml | grep -q 'android:glEsVersion="0x00030000"'
+
+      - name: Upload Android Native OpenGL ES artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-opengles-preview
+          path: |
+            Artifacts/NuGet/MonoGame.Framework.Android.OpenGLES.*.nupkg
+            Artifacts/native/mgruntime/androidgles/android-arm64/Release/libmgruntime.so
+            Artifacts/android-native-opengles-readelf-*.txt
+
+  apple-native-opengl:
+    name: apple-native-opengl-preview
+    runs-on: macos-26
+    env:
+      NativeOpenGLDotnetVersion: 10.0.300
+      NativeOpenGLWorkloadVersion: 10.0.300
+      NativeOpenGLXCodeVersion: 26.3
+      NativeOpenGLPackageVersion: 0.0.0-smoke
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Generate Native OpenGL global.json
+        run: |
+          echo '{ "sdk": { "version": "${{ env.NativeOpenGLDotnetVersion }}", "rollForward": "disable" } }' > global.json
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '${{ env.NativeOpenGLDotnetVersion }}'
+          global-json-file: './global.json'
+
+      - name: Pin Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '${{ env.NativeOpenGLXCodeVersion }}'
+
+      - name: Install Apple workloads
+        run: dotnet workload install ios --version "${NativeOpenGLWorkloadVersion}"
+
+      - name: Setup Premake5
+        uses: abel0b/setup-premake@v2.4
+        with:
+          version: "5.0.0-beta2"
+
+      - name: Build native dependencies
+        run: dotnet run --project build/Build.csproj -- --target="Build Native Dependencies"
+
+      - name: Build Native OpenGL converter and stock effects
+        run: |
+          cd native/pipeline
+          premake5 --arch=arm64 gmake2
+          make config=release mgfx-spvc
+          cd ../..
+          scripts/native-opengl/build-stock-effects.sh
+
+      - name: Build Native OpenGL runtimes
+        run: |
+          cd native/monogame
+          premake5 --backend=opengl --arch=arm64 gmake2
+          make config=release desktopgl
+          cd ../..
+          native/monogame/opengl/build-ios-xcframework.sh Release
+
+      - name: Audit Apple Native OpenGL artifacts
+        run: |
+          dylib=Artifacts/native/mgruntime/desktopgl/macosx/Release/libmgruntime.dylib
+          lipo "$dylib" -verify_arch arm64
+          otool -L "$dylib" | tee Artifacts/apple-native-opengl-otool.txt
+          lipo Artifacts/native/mgruntime/iosgles/Release/MGOpenGL.xcframework/ios-arm64/libmgruntime.a -verify_arch arm64
+          lipo Artifacts/native/mgruntime/iosgles/Release/MGOpenGL.xcframework/ios-arm64_x86_64-simulator/libmgruntime-simulator.a -verify_arch arm64 x86_64
+
+      - name: Build and pack managed Apple Native OpenGL targets
+        run: |
+          dotnet build MonoGame.Framework/MonoGame.Framework.iOS.OpenGLES.csproj \
+            -c Release -r iossimulator-arm64
+          dotnet pack MonoGame.Framework/MonoGame.Framework.iOS.OpenGLES.csproj \
+            -c Release \
+            -o Artifacts/NuGet \
+            -p:Version="${NativeOpenGLPackageVersion}"
+          dotnet pack src/NuGetPackages/MonoGame.Runtime.Mac.OpenGL/MonoGame.Runtime.Mac.OpenGL.csproj \
+            -c Release \
+            -o Artifacts/NuGet \
+            -p:Version="${NativeOpenGLPackageVersion}"
+
+      - name: Run macOS Native OpenGL validation
+        run: |
+          set -o pipefail
+          dotnet run --project Tests/MonoGame.Tests.DesktopNativeGL.csproj \
+            -c Release -- --test=MonoGame.Tests.Graphics.NativeOpenGLValidationTest \
+            | tee Artifacts/native-opengl-validation.txt
+          grep -q 'MONOGAME_OPENGL_VALIDATION pass api=4.1 mrt=4 format=Color msaa=0' Artifacts/native-opengl-validation.txt
+
+      - name: Audit Apple Native OpenGL packages
+        run: |
+          ios_package=$(find Artifacts/NuGet -name 'MonoGame.Framework.iOS.OpenGLES.*.nupkg' -print -quit)
+          mac_package=$(find Artifacts/NuGet -name 'MonoGame.Runtime.Mac.OpenGL.*.nupkg' -print -quit)
+          test -n "$ios_package"
+          test -n "$mac_package"
+          unzip -l "$ios_package" | grep -q 'buildTransitive/MonoGame.Framework.iOS.OpenGLES.targets'
+          unzip -l "$ios_package" | grep -q 'runtimes/ios/native/MGOpenGL.xcframework/ios-arm64/libmgruntime.a'
+          unzip -l "$mac_package" | grep -q 'runtimes/osx/native/libmgruntime.dylib'
+
+      - name: Upload Apple Native OpenGL artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-native-opengl-preview
+          path: |
+            Artifacts/NuGet/MonoGame.Framework.iOS.OpenGLES.*.nupkg
+            Artifacts/NuGet/MonoGame.Runtime.Mac.OpenGL.*.nupkg
+            Artifacts/native/mgruntime/desktopgl/macosx/Release/libmgruntime.dylib
+            Artifacts/native/mgruntime/iosgles/Release/MGOpenGL.xcframework
+            Artifacts/apple-native-opengl-otool.txt
+            Artifacts/native-opengl-validation.txt
+
   apple-metal:
     name: apple-metal-preview
     runs-on: macos-26

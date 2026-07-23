@@ -41,6 +41,10 @@ namespace MonoGame.Effect
 
         public static readonly ShaderProfile MetaliOS = FromName("MetaliOS");
 
+        public static readonly ShaderProfile OpenGLES_3_0 = FromName("OpenGLES_3_0");
+
+        public static readonly ShaderProfile OpenGL_4_1 = FromName("OpenGL_4_1");
+
         /// <summary>
         /// Returns all the loaded shader profiles.
         /// </summary>
@@ -71,6 +75,11 @@ namespace MonoGame.Effect
 
         internal abstract void ValidateShaderModels(PassInfo pass);
 
+        internal virtual IEnumerable<string> GetBuildDependencies()
+        {
+            yield break;
+        }
+
         internal abstract ShaderData CreateShader(ShaderResult shaderResult, string shaderFunction, string shaderProfile, bool isVertexShader, EffectObject effect, ref string errorsAndWarnings);
 
         protected static void ParseShaderModel(string text, Regex regex, out int major, out int minor)
@@ -92,6 +101,8 @@ namespace MonoGame.Effect
             TargetPlatform.Windows => ShaderProfile.DirectX_11,
             TargetPlatform.iOS or TargetPlatform.Android or TargetPlatform.DesktopGL or TargetPlatform.MacOSX or TargetPlatform.RaspberryPi or TargetPlatform.Web => ShaderProfile.OpenGL,
             TargetPlatform.DesktopVK or TargetPlatform.AndroidVK => ShaderProfile.Vulkan,
+            TargetPlatform.AndroidNativeGLES or TargetPlatform.iOSNativeGLES => ShaderProfile.OpenGLES_3_0,
+            TargetPlatform.DesktopNativeGL => ShaderProfile.OpenGL_4_1,
             TargetPlatform.MacOSMetal => ShaderProfile.MetalMacOS,
             TargetPlatform.iOSMetal => ShaderProfile.MetaliOS,
             TargetPlatform.WindowsDX12 or TargetPlatform.XboxOne or TargetPlatform.XboxSeries => ShaderProfile.DirectX_12,

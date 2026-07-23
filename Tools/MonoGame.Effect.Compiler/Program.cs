@@ -85,10 +85,12 @@ namespace MonoGame.Effect.Compiler
                 if (!string.IsNullOrEmpty(shaderErrorsAndWarnings))
                     Console.Error.WriteLine(ConvertMessage(shaderErrorsAndWarnings));
             }
-            catch (ShaderCompilerException)
+            catch (ShaderCompilerException ex)
             {
                 // Write the compiler errors and warnings and let the user know what happened.
                 Console.Error.WriteLine(ConvertMessage(shaderErrorsAndWarnings));
+                if (!string.IsNullOrEmpty(ex.Message))
+                    Console.Error.WriteLine(ConvertMessage(ex.Message));
                 Console.Error.WriteLine("Failed to compile '{0}'!", nativeSourceFilepath);
                 return 1;
             }

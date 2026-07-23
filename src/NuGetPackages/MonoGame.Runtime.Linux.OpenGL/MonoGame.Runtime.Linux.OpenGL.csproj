@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <Content Include="../../../Artifacts/native/mgruntime/desktopgl/linux/x64/Release/libmgruntime.so"
+      Condition="Exists('../../../Artifacts/native/mgruntime/desktopgl/linux/x64/Release/libmgruntime.so')">
+      <PackagePath>runtimes/linux-x64/native</PackagePath>
+    </Content>
+    <Content Include="../../../Artifacts/native/mgruntime/desktopgl/linux/arm64/Release/libmgruntime.so"
+      Condition="Exists('../../../Artifacts/native/mgruntime/desktopgl/linux/arm64/Release/libmgruntime.so')">
+      <PackagePath>runtimes/linux-arm64/native</PackagePath>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="ValidateNativeOpenGLRuntime" BeforeTargets="GenerateNuspec">
+    <Error Condition="!Exists('../../../Artifacts/native/mgruntime/desktopgl/linux/x64/Release/libmgruntime.so')"
+           Text="The Linux x64 Native OpenGL runtime is missing. Collect the desktopgl Release artifact before packing MonoGame.Runtime.Linux.OpenGL." />
+    <Error Condition="!Exists('../../../Artifacts/native/mgruntime/desktopgl/linux/arm64/Release/libmgruntime.so')"
+           Text="The Linux ARM64 Native OpenGL runtime is missing. Collect the desktopgl Release artifact before packing MonoGame.Runtime.Linux.OpenGL." />
+  </Target>
+
+</Project>

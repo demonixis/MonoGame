@@ -47,6 +47,7 @@ function pipeline_native()
     cppdialect "C++17"
 
     files {"include/**.h", "*.cpp"}
+    removefiles {"mgfx-spvc.cpp"}
     includedirs {"include", "../monogame/include", "../../external/stb"}
 end
 
@@ -71,3 +72,49 @@ buildoptions {"/MT"}
 filter "system:macosx"
 buildoptions {"-arch x86_64", "-arch arm64"}
 linkoptions {"-arch x86_64", "-arch arm64"}
+filter {}
+
+project "mgfx-spvc"
+kind "ConsoleApp"
+language "C++"
+cppdialect "C++17"
+targetname "mgfx-spvc"
+files {
+    "mgfx-spvc.cpp",
+    "external/spirv-cross/spirv_cross.cpp",
+    "external/spirv-cross/spirv_cross_parsed_ir.cpp",
+    "external/spirv-cross/spirv_parser.cpp",
+    "external/spirv-cross/spirv_cfg.cpp",
+    "external/spirv-cross/spirv_glsl.cpp"
+}
+includedirs {"external/spirv-cross/include", "external/spirv-cross"}
+
+if os.target() == "windows" then
+    filter "platforms:x64"
+    architecture "x86_64"
+    filter "platforms:arm64"
+    architecture "ARM64"
+    filter {}
+    targetdir "../../Artifacts/native/mgfx-spvc/%{cfg.system}/%{cfg.platform}/%{cfg.buildcfg}"
+else
+    local target_arch = _OPTIONS["arch"] or "x64"
+    architecture(target_arch == "arm64" and "ARM64" or "x64")
+    if os.target() == "macosx" then
+        targetdir "../../Artifacts/native/mgfx-spvc/%{cfg.system}/%{cfg.buildcfg}"
+    else
+        targetdir("../../Artifacts/native/mgfx-spvc/%{cfg.system}/" .. target_arch .. "/%{cfg.buildcfg}")
+    end
+end
+
+filter "configurations:Debug"
+defines {"DEBUG"}
+symbols "On"
+filter "configurations:Release"
+defines {"NDEBUG"}
+optimize "On"
+filter "system:linux"
+pic "On"
+filter "system:macosx"
+buildoptions {"-arch x86_64", "-arch arm64"}
+linkoptions {"-arch x86_64", "-arch arm64"}
+filter {}

@@ -24,7 +24,8 @@ newoption {
         { "all", "All backends supported by the host" },
         { "vulkan", "Vulkan only" },
         { "metal", "Metal only" },
-        { "directx12", "DirectX 12 only" }
+        { "directx12", "DirectX 12 only" },
+        { "opengl", "OpenGL 4.1 Core only" }
     }
 }
 
@@ -58,6 +59,22 @@ function common(project_name, target_name)
 
     files {"include/**.h", "common/**.h", "common/**.cpp"}
     includedirs {"include", "../../external/stb"}
+end
+
+-- Native OpenGL is supported on Windows, macOS, and Linux through SDL.
+function opengl()
+    defines {"MG_OPENGL"}
+    files {"opengl/**.h", "opengl/**.cpp", "opengl/**.mm"}
+    includedirs {"external/sdl2/sdl/include"}
+
+    filter {"system:macosx"}
+    defines {"GL_SILENCE_DEPRECATION"}
+    links {"OpenGL.framework"}
+    filter {"system:windows"}
+    links {"opengl32"}
+    filter {"system:linux"}
+    links {"GL"}
+    filter {}
 end
 
 -- SDL is supported on all desktop platforms.
@@ -199,6 +216,15 @@ if os.target() == "windows" then
 end
 
 local selected_backend = _OPTIONS["backend"] or "all"
+
+if selected_backend == "all" or selected_backend == "opengl" then
+    project "desktopgl"
+    common("desktopgl")
+    sdl2()
+    opengl()
+    faudio()
+    configs()
+end
 
 if selected_backend == "all" or selected_backend == "vulkan" then
     project "desktopvk"

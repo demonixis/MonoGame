@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <Content Include="../../../Artifacts/native/mgruntime/desktopgl/macosx/Release/libmgruntime.dylib"
+      Condition="Exists('../../../Artifacts/native/mgruntime/desktopgl/macosx/Release/libmgruntime.dylib')">
+      <PackagePath>runtimes/osx/native</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="ValidateNativeOpenGLRuntime" BeforeTargets="GenerateNuspec">
+    <Error Condition="!Exists('../../../Artifacts/native/mgruntime/desktopgl/macosx/Release/libmgruntime.dylib')"
+           Text="The universal macOS Native OpenGL runtime is missing. Build desktopgl Release before packing MonoGame.Runtime.Mac.OpenGL." />
+  </Target>
+
+</Project>

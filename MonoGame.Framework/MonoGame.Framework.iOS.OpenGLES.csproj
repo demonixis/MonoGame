@@ -1,0 +1,101 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <TargetPlatformVersion>26.2</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>12.0</SupportedOSPlatformVersion>
+    <DefineConstants>IOS;NATIVE_GLES;NATIVE_GRAPHICS;STBSHARP_INTERNAL</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>The MonoGame runtime for iOS and iPadOS using strict Native OpenGL ES 3.0.</Description>
+    <PackageTags>monogame;ios;opengles;native</PackageTags>
+    <PackageId>MonoGame.Framework.iOS.OpenGLES</PackageId>
+    <AssemblyName>MonoGame.Framework</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>False</AppendTargetFrameworkToOutputPath>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageReadmeFile>README-packages.md</PackageReadmeFile>
+    <CheckEolWorkloads>false</CheckEolWorkloads>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <iOSOpenGlesNativeConfiguration Condition="'$(iOSOpenGlesNativeConfiguration)' == '' and Exists('../Artifacts/native/mgruntime/iosgles/$(Configuration)/MGOpenGL.xcframework')">$(Configuration)</iOSOpenGlesNativeConfiguration>
+    <iOSOpenGlesNativeConfiguration Condition="'$(iOSOpenGlesNativeConfiguration)' == ''">Release</iOSOpenGlesNativeConfiguration>
+    <iOSOpenGlesNativeArtifact>../Artifacts/native/mgruntime/iosgles/$(iOSOpenGlesNativeConfiguration)/MGOpenGL.xcframework</iOSOpenGlesNativeArtifact>
+  </PropertyGroup>
+
+  <Import Project="MonoGame.Framework.Native.Graphics.targets" />
+
+  <ItemGroup>
+    <None Include="../README-packages.md" Pack="true" PackagePath="\" />
+    <None Include="MonoGame.Framework.iOS.OpenGLES.targets" Pack="true" PackagePath="buildTransitive" />
+    <None Include="$(iOSOpenGlesNativeArtifact)/**/*"
+          Pack="true"
+          PackagePath="runtimes/ios/native/MGOpenGL.xcframework/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin/**/*" />
+    <Compile Remove="obj/**/*" />
+    <Compile Remove="Platform/**/*" />
+    <Compile Remove="Properties/**/*" />
+    <Compile Remove="Utilities/System.Numerics.Vectors/**/*" />
+    <Compile Remove="Devices/**/*" />
+    <None Remove="Platform/**/*" />
+    <None Remove="Utilities/System.Numerics.Vectors/**/*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="@(MonoGameNativeGraphicsSource)" />
+    <Compile Include="Platform/Native/PlatformInfo.NativeOpenGL.cs" />
+    <Compile Include="Platform/iOS/Devices/Sensors/Accelerometer.cs" />
+    <Compile Include="Platform/iOS/Devices/Sensors/Compass.cs" />
+    <Compile Include="Platform/iOS/iOSGamePlatform.cs" />
+    <Compile Include="Platform/iOS/iOSGameView.NativeOpenGLES.cs" />
+    <Compile Include="Platform/iOS/iOSGameViewController.cs" />
+    <Compile Include="Platform/iOS/iOSGameView_Touch.cs" />
+    <Compile Include="Platform/iOS/iOSGameWindow.cs" />
+    <Compile Include="Platform/iOS/OrientationConverter.cs" />
+
+    <Compile Include="Platform/Audio/Xact/WaveBank.Default.cs" />
+    <Compile Include="Platform/GamePlatform.Mobile.cs" />
+    <Compile Include="Platform/Input/GamePad.iOS.cs" />
+    <Compile Include="Platform/Input/Joystick.Default.cs" />
+    <Compile Include="Platform/Input/Keyboard.Default.cs" />
+    <Compile Include="Platform/Input/KeyboardInput.iOS.cs" />
+    <Compile Include="Platform/Input/MessageBox.iOS.cs" />
+    <Compile Include="Platform/Input/Mouse.Default.cs" />
+    <Compile Include="Platform/Input/MouseCursor.Default.cs" />
+    <Compile Include="Platform/Media/MediaPlayer.Default.cs" />
+    <Compile Include="Platform/TitleContainer.MacOS.cs" />
+    <Compile Include="Platform/Utilities/AssemblyHelper.cs" />
+    <Compile Include="Platform/Utilities/InteropHelpers.cs" />
+    <Compile Include="Platform/Utilities/ReflectionHelpers.Default.cs" />
+    <Compile Include="Platform/Threading.cs" />
+
+    <Compile Include="../ThirdParty/StbImageSharp/src/**/*.cs" Exclude="../ThirdParty/StbImageSharp/src/bin/**/*.cs;../ThirdParty/StbImageSharp/src/obj/**/*.cs" LinkBase="Utilities/StbImageSharp" />
+    <Compile Include="../ThirdParty/StbImageWriteSharp/src/**/*.cs" Exclude="../ThirdParty/StbImageWriteSharp/src/bin/**/*.cs;../ThirdParty/StbImageWriteSharp/src/obj/**/*.cs" LinkBase="Utilities/StbImageWriteSharp" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <NativeReference Include="$(iOSOpenGlesNativeArtifact)/ios-arm64/libmgruntime.a"
+                     Condition="'$(RuntimeIdentifier)' == 'ios-arm64' and Exists('$(iOSOpenGlesNativeArtifact)/ios-arm64/libmgruntime.a')">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>OpenGLES QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+    <NativeReference Include="$(iOSOpenGlesNativeArtifact)/ios-arm64_x86_64-simulator/libmgruntime-simulator.a"
+                     Condition="('$(RuntimeIdentifier)' == 'iossimulator-arm64' or '$(RuntimeIdentifier)' == 'iossimulator-x64') and Exists('$(iOSOpenGlesNativeArtifact)/ios-arm64_x86_64-simulator/libmgruntime-simulator.a')">
+      <Kind>Static</Kind>
+      <ForceLoad>true</ForceLoad>
+      <IsCxx>true</IsCxx>
+      <Frameworks>OpenGLES QuartzCore Foundation UIKit</Frameworks>
+    </NativeReference>
+  </ItemGroup>
+
+  <Import Project="Platform/OpenAL.targets" />
+  <Import Project="MonoGame.Framework.Devices.Sensors.targets" />
+
+  <Target Name="ValidateiOSOpenGlesNativeArtifact" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(iOSOpenGlesNativeArtifact)')" Text="The iOS Native GLES XCFramework was not found at '$(iOSOpenGlesNativeArtifact)'. Run native/monogame/opengl/build-ios-xcframework.sh $(iOSOpenGlesNativeConfiguration)." />
+  </Target>
+</Project>

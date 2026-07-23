@@ -34,19 +34,19 @@ namespace Microsoft.Xna.Framework
                 AndroidGameActivity.Paused -= Activity_Paused;
                 AndroidGameActivity.Resumed -= Activity_Resumed;
 
-#if VULKAN
+#if VULKAN || NATIVE_GLES
                 _gameWindow.Dispose();
 #endif
             }
             base.Dispose(disposing);
-#if VULKAN
+#if VULKAN || NATIVE_GLES
             NativeGraphicsSystem.Shutdown();
 #endif
         }
 
         internal override void BeforeGraphicsDeviceDispose()
         {
-#if VULKAN
+#if VULKAN || NATIVE_GLES
             _gameWindow.GameView.StopAndWait();
 #endif
         }

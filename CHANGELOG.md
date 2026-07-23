@@ -4,11 +4,15 @@
 
 ### Changed
 
+- Added an opt-in native OpenGL/OpenGL ES backend, explicit Android, iOS and
+  desktop packages, versioned capability and render-target ABI entry points,
+  dedicated MGFX profiles, and deterministic four-target MRT validation.
 - The C3DE source-reference Android GLES and iOS OpenGL framework heads now target .NET 10 with explicit Android API 36/API 23+ and Apple SDK 26.2 contracts.
 
 ### Fixed
 
 - Mobile OpenGL builds no longer select the SDL-only OpenXR interop branch, Android logging binds the platform namespace explicitly, and platform-specific intermediate paths cannot leak generated `obj`/`bin` sources into sibling heads.
+- Native OpenGL effects now reflect stage-qualified GLSL block names, track `mgfx-spvc` as an incremental MGCB dependency, and preserve single-face `RenderTargetCube` bindings used by reflection probes instead of producing stale black or corrupt frames.
 
 ## 3.8.4 Release - April 2nd - 2025
 

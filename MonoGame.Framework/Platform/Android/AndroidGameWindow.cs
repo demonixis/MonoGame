@@ -79,6 +79,8 @@ namespace Microsoft.Xna.Framework
             
 #if VULKAN
             GameView = new MonoGameAndroidVulkanGameView(context, this, _game);
+#elif NATIVE_GLES
+            GameView = new MonoGameAndroidOpenGlesGameView(context, this, _game);
 #else
             GameView = new MonoGameAndroidGameView(context, this, _game);
 #endif

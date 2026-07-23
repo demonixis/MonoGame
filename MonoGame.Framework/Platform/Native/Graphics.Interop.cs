@@ -67,6 +67,26 @@ internal struct MGG_GraphicsDevice_Caps
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct MGG_GraphicsDevice_CapsV2
+{
+    public uint StructSize;
+    public uint AbiVersion;
+    public int ApiMajor;
+    public int ApiMinor;
+    public int MaxTextureSlots;
+    public int MaxVertexTextureSlots;
+    public int MaxVertexBufferSlots;
+    public int ShaderProfile;
+    public int MaxMultiSampleCount;
+    public TextureCompressionCapabilities TextureCompression;
+    public NativeGraphicsFeatures Features;
+    public float MaxAnisotropy;
+    public int MaxRenderTargets;
+    public int MaxDrawBuffers;
+    public int MaxColorAttachments;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct MGG_OpenXrGraphicsBinding
 {
     public int Api;
@@ -93,6 +113,29 @@ internal enum TextureCompressionCapabilities
     Etc2 = 1 << 1,
     Astc = 1 << 2,
     Pvrtc = 1 << 3,
+}
+
+[Flags]
+internal enum NativeGraphicsFeatures : uint
+{
+    None = 0,
+    AnisotropicFiltering = 1 << 0,
+}
+
+internal enum GraphicsDeviceStatus
+{
+    Success = 0,
+    InvalidArgument = 1,
+    InsufficientSize = 2,
+    Unsupported = 3,
+    InvalidRenderTargetCount = 4,
+    InvalidRenderTarget = 5,
+    RenderTargetFormatNotSupported = 6,
+    RenderTargetDimensionsMismatch = 7,
+    RenderTargetMultisamplingNotSupported = 8,
+    RenderTargetDepthAttachmentNotSupported = 9,
+    DeviceUnavailable = 10,
+    FramebufferIncomplete = 11,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -181,6 +224,7 @@ internal enum PresentationSurfaceKind
     SdlWindow = 0,
     MetalLayer = 1,
     AndroidNativeWindow = 2,
+    OpenGlesLayer = 3,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -212,6 +256,15 @@ internal struct MGG_PresentationSurface
         return new MGG_PresentationSurface
         {
             Kind = PresentationSurfaceKind.AndroidNativeWindow,
+            Handle = handle,
+        };
+    }
+
+    public static MGG_PresentationSurface FromOpenGlesLayer(nint handle)
+    {
+        return new MGG_PresentationSurface
+        {
+            Kind = PresentationSurfaceKind.OpenGlesLayer,
             Handle = handle,
         };
     }
@@ -291,6 +344,12 @@ internal static unsafe partial class MGG
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_GetCaps", ExactSpelling = true)]
     public static extern void GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, out MGG_GraphicsDevice_Caps caps);
 
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_GetCapsV2", ExactSpelling = true)]
+    public static extern GraphicsDeviceStatus GraphicsDevice_GetCapsV2(
+        MGG_GraphicsDevice* device,
+        ref MGG_GraphicsDevice_CapsV2 caps,
+        uint capsSize);
+
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_ResizeSwapchain", ExactSpelling = true)]
     public static extern void GraphicsDevice_ResizeSwapchain(
         MGG_GraphicsDevice* device,
@@ -347,6 +406,9 @@ internal static unsafe partial class MGG
 
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SetRenderTargets", ExactSpelling = true)]
     public static extern void GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture** targets, int* arraySlices, int count);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SetRenderTargetsV2", ExactSpelling = true)]
+    public static extern GraphicsDeviceStatus GraphicsDevice_SetRenderTargetsV2(MGG_GraphicsDevice* device, MGG_Texture** targets, int* arraySlices, int count);
 
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SetConstantBuffer", ExactSpelling = true)]
     public static extern void GraphicsDevice_SetConstantBuffer(MGG_GraphicsDevice* device, ShaderStage stage, int slot, MGG_Buffer* buffer);

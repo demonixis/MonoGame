@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <MonoGamePlatform>AndroidNativeGLES</MonoGamePlatform>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
+    <AndroidManifestOverlay Include="$(MSBuildThisFileDirectory)MonoGame.Framework.Android.OpenGLES.AndroidManifest.xml" />
+    <AndroidNativeLibrary Include="$(MSBuildThisFileDirectory)..\runtimes\android-arm64\native\libmgruntime.so">
+      <Abi>arm64-v8a</Abi>
+      <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    </AndroidNativeLibrary>
+  </ItemGroup>
+</Project>

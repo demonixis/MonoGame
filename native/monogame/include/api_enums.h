@@ -75,11 +75,20 @@ enum class MGSurfaceFormat : mgint
     Astc12X12Rgba = 101,
 };
 
+enum class MGDepthFormat : mgint
+{
+    None = 0,
+    Depth16 = 1,
+    Depth24 = 2,
+    Depth24Stencil8 = 3,
+};
+
 enum class MGPresentationSurfaceKind : mgint
 {
     SdlWindow = 0,
     MetalLayer = 1,
     AndroidNativeWindow = 2,
+    OpenGlesLayer = 3,
 };
 
 enum class MGTextureCompressionCapabilities : mgint
@@ -91,12 +100,26 @@ enum class MGTextureCompressionCapabilities : mgint
     Pvrtc = 8,
 };
 
-enum class MGDepthFormat : mgint
+enum class MGGraphicsDeviceStatus : mgint
+{
+    Success = 0,
+    InvalidArgument = 1,
+    InsufficientSize = 2,
+    Unsupported = 3,
+    InvalidRenderTargetCount = 4,
+    InvalidRenderTarget = 5,
+    RenderTargetFormatNotSupported = 6,
+    RenderTargetDimensionsMismatch = 7,
+    RenderTargetMultisamplingNotSupported = 8,
+    RenderTargetDepthAttachmentNotSupported = 9,
+    DeviceUnavailable = 10,
+    FramebufferIncomplete = 11,
+};
+
+enum class MGNativeGraphicsFeatures : mguint
 {
     None = 0,
-    Depth16 = 1,
-    Depth24 = 2,
-    Depth24Stencil8 = 3,
+    AnisotropicFiltering = 1,
 };
 
 enum class MGClearOptions : mgint

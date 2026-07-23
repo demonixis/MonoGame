@@ -57,6 +57,13 @@ public class EffectProcessor() : ContentProcessor<EffectContent, CompiledEffectC
             // it will trigger a rebuild of this effect.
             foreach (var dep in shaderResult.Dependencies)
                 context.AddDependency(dep);
+
+            // Native shader profiles invoke external converters whose output is
+            // embedded in the XNB. Track those tools as content dependencies so
+            // an incremental MGCB build cannot pair a new runtime with stale
+            // shader reflection from an older converter.
+            foreach (var dep in options.Profile.GetBuildDependencies())
+                context.AddDependency(dep);
         }
         catch (InvalidContentException)
         {

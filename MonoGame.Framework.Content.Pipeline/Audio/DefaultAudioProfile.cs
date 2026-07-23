@@ -16,8 +16,10 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Audio
         {
             return  platform == TargetPlatform.Android ||
                     platform == TargetPlatform.AndroidVK ||
+                    platform == TargetPlatform.AndroidNativeGLES ||
                     platform == TargetPlatform.DesktopGL ||
                     platform == TargetPlatform.DesktopVK ||
+                    platform == TargetPlatform.DesktopNativeGL ||
                     platform == TargetPlatform.MacOSX ||
                     platform == TargetPlatform.MacOSMetal ||
                     platform == TargetPlatform.NativeClient ||
@@ -26,6 +28,7 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Audio
                     platform == TargetPlatform.WindowsDX12 ||
                     platform == TargetPlatform.iOS ||
                     platform == TargetPlatform.iOSMetal ||
+                    platform == TargetPlatform.iOSNativeGLES ||
                     platform == TargetPlatform.Web;
         }
 
@@ -37,9 +40,11 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Audio
             {
                 if (platform == TargetPlatform.iOS ||
                     platform == TargetPlatform.iOSMetal ||
+                    platform == TargetPlatform.iOSNativeGLES ||
                     platform == TargetPlatform.MacOSX ||
                     platform == TargetPlatform.MacOSMetal ||
-                    platform == TargetPlatform.DesktopGL)
+                    platform == TargetPlatform.DesktopGL ||
+                    platform == TargetPlatform.DesktopNativeGL)
                     targetFormat = ConversionFormat.ImaAdpcm;
                 else
                     targetFormat = ConversionFormat.Adpcm;
@@ -56,7 +61,9 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Audio
             if ( platform == TargetPlatform.Windows )
                 targetFormat = ConversionFormat.WindowsMedia;
 
-            else if (platform == TargetPlatform.DesktopGL || platform == TargetPlatform.DesktopVK)
+            else if (platform == TargetPlatform.DesktopGL ||
+                     platform == TargetPlatform.DesktopVK ||
+                     platform == TargetPlatform.DesktopNativeGL)
                 targetFormat = ConversionFormat.Vorbis;
             else if (platform == TargetPlatform.Web)
                 targetFormat = ConversionFormat.Mp3;

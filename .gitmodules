@@ -31,3 +31,6 @@
 [submodule "native/monogame/external/faudio"]
 	path = native/monogame/external/faudio
 	url = https://github.com/FNA-XNA/FAudio.git
+[submodule "native/pipeline/external/spirv-cross"]
+	path = native/pipeline/external/spirv-cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git

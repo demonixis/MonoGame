@@ -2013,6 +2013,43 @@ void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_C
 			static_cast<mgint>(caps.TextureCompression) | static_cast<mgint>(MGTextureCompressionCapabilities::Astc));
 }
 
+MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
+	MGG_GraphicsDevice* device,
+	MGG_GraphicsDevice_CapsV2& caps,
+	mguint capsSize)
+{
+	if (device == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+	if (capsSize < sizeof(caps.StructSize) + sizeof(caps.AbiVersion))
+		return MGGraphicsDeviceStatus::InsufficientSize;
+
+	MGG_GraphicsDevice_Caps legacy{};
+	MGG_GraphicsDevice_GetCaps(device, legacy);
+	MGG_GraphicsDevice_CapsV2 value{};
+	value.StructSize = sizeof(value);
+	value.AbiVersion = 2;
+	value.ApiMajor = VK_API_VERSION_MAJOR(device->deviceProperties.apiVersion);
+	value.ApiMinor = VK_API_VERSION_MINOR(device->deviceProperties.apiVersion);
+	value.MaxTextureSlots = legacy.MaxTextureSlots;
+	value.MaxVertexTextureSlots = legacy.MaxVertexTextureSlots;
+	value.MaxVertexBufferSlots = legacy.MaxVertexBufferSlots;
+	value.ShaderProfile = legacy.ShaderProfile;
+	value.MaxMultiSampleCount = legacy.MaxMultiSampleCount;
+	value.TextureCompression = legacy.TextureCompression;
+	if (device->deviceFeatures.samplerAnisotropy == VK_TRUE)
+	{
+		value.Features = MGNativeGraphicsFeatures::AnisotropicFiltering;
+		value.MaxAnisotropy = device->deviceProperties.limits.maxSamplerAnisotropy;
+	}
+	else
+		value.MaxAnisotropy = 1.0f;
+	value.MaxRenderTargets = std::min<mgint>(4, static_cast<mgint>(device->deviceProperties.limits.maxColorAttachments));
+	value.MaxDrawBuffers = value.MaxRenderTargets;
+	value.MaxColorAttachments = device->deviceProperties.limits.maxColorAttachments;
+	std::memcpy(&caps, &value, std::min(capsSize, static_cast<mguint>(sizeof(value))));
+	return MGGraphicsDeviceStatus::Success;
+}
+
 void MGVK_RecreateSwapChain(
 	MGG_GraphicsDevice* device,
 	void* nativeWindowHandle,
@@ -3275,6 +3312,27 @@ void MGG_GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture
 
 	device->pipelineStateDirty = true;
 	device->renderTargetDirty = true;
+}
+
+MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderTargetsV2(
+	MGG_GraphicsDevice* device,
+	MGG_Texture** targets,
+	mgint* arraySlices,
+	mgint count)
+{
+	if (device == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+	if (count < 0 || count > static_cast<mgint>(MGVK_NUM_TARGETS))
+		return MGGraphicsDeviceStatus::InvalidRenderTargetCount;
+	if (count > 0 && targets == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+	for (mgint index = 0; index < count; ++index)
+	{
+		if (targets[index] == nullptr)
+			return MGGraphicsDeviceStatus::InvalidRenderTarget;
+	}
+	MGG_GraphicsDevice_SetRenderTargets(device, targets, arraySlices, count);
+	return MGGraphicsDeviceStatus::Success;
 }
 
 void MGG_GraphicsDevice_SetConstantBuffer(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_Buffer* buffer)

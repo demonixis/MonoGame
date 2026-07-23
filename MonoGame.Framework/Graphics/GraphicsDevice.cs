@@ -968,6 +968,10 @@ namespace Microsoft.Xna.Framework.Graphics
                 }
             }
 
+#if NATIVE
+            PlatformValidateRenderTargets(renderTargets);
+#endif
+
             // Try to early out if the current and new bindings are equal.
             if (_currentRenderTargetCount == renderTargetCount)
             {

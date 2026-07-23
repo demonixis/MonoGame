@@ -34,6 +34,14 @@ public sealed class DownloadArtifactsTask : AsyncFrostingTask<BuildContext>
         await DownloadArtifactAsync(context, $"mgpipeline-linux-x64.{context.Version}", "native/mgpipeline/linux/x64/Release/");
         await DownloadArtifactAsync(context, $"mgpipeline-linux-arm64.{context.Version}", "native/mgpipeline/linux/arm64/Release/");
 
+        // Native OpenGL shader conversion tools are distributed with MGCB and
+        // mgfxc, so the deploy repack needs every supported host RID.
+        await DownloadArtifactAsync(context, $"mgfx-spvc-windows-x64.{context.Version}", "native/mgfx-spvc/windows/x64/Release/");
+        await DownloadArtifactAsync(context, $"mgfx-spvc-windows-arm64.{context.Version}", "native/mgfx-spvc/windows/arm64/Release/");
+        await DownloadArtifactAsync(context, $"mgfx-spvc-linux-x64.{context.Version}", "native/mgfx-spvc/linux/x64/Release/");
+        await DownloadArtifactAsync(context, $"mgfx-spvc-linux-arm64.{context.Version}", "native/mgfx-spvc/linux/arm64/Release/");
+        await DownloadArtifactAsync(context, $"mgfx-spvc-macos.{context.Version}", "native/mgfx-spvc/macosx/Release/");
+
         await DownloadArtifactAsync(context, $"MonoGame.Templates.VSExtension.{context.Version}.vsix", "vsix");
     }
 }

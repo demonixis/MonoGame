@@ -19,6 +19,9 @@ public sealed class RepackForDeployTask : FrostingTask<BuildContext>
         // mgcb
         context.DotNetPack(context.GetProjectPath(ProjectType.Tools, "MonoGame.Content.Builder"), context.DotNetPackSettings);
 
+        // mgfxc carries the same RID-specific native OpenGL converter assets.
+        context.DotNetPack(context.GetProjectPath(ProjectType.Tools, "MonoGame.Effect.Compiler"), context.DotNetPackSettings);
+
         // Repack mgcb-editor-linux with all existing architectures.
         // This ensures libmgpipeline.so is shipped for both linux-x64 and linux-arm64.
         context.DotNetPublish(context.GetProjectPath(ProjectType.MGCBEditor, "Linux"), context.DotNetPublishSettings);

@@ -98,7 +98,7 @@ namespace Microsoft.Xna.Framework
 
         protected override void Dispose(bool disposing)
         {
-#if METAL
+#if METAL || NATIVE_GLES
             NativeGraphicsSystem.Shutdown();
 #endif
             base.Dispose(disposing);

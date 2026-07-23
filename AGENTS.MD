@@ -81,6 +81,28 @@ Upstream doesn't allow LLM-generated contributions BUT this fork is private and 
   the same queue used by the renderer. WGL/GLX bindings must describe the real
   SDL window/context, not inferred or temporary handles.
 
+## Native OpenGL backend rules
+
+- Native OpenGL is an additive preview backend. It must not replace DesktopGL,
+  the existing Android/iOS OpenGL heads, or their content and shader profiles.
+  `docs/native-opengl.md` is its living status and acceptance-gate document.
+- Preserve the serialized contracts: target-platform values 19, 20 and 21 map
+  to Android Native GLES, iOS Native GLES and Desktop Native GL; MGFX formats
+  82 and 84 map exactly to GLSL ES 3.0 and desktop GL 4.1 Core.
+- Native effects use DXC to SPIR-V and the pinned SPIRV-Cross converter. Stock
+  effects must compile for both profiles; do not fall back to MojoShader or a
+  lower GL context when the converter or requested API is unavailable.
+- Keep capability queries and render-target binding size-aware and versioned.
+  Existing single-target formats remain available. The accepted multi-target
+  contract is two through four `RenderTarget2D` `Color` targets with matching
+  dimensions, depth only on target zero, and no MRT with
+  MSAA. Single-target
+  MSAA remains code-retained but is not qualified until a dedicated test passes.
+- Android requires API 23, ARM64 and a strict GLES 3 context. iOS requires an
+  EAGL3 context. Desktop requires an SDL GL 4.1 Core context. Builds and package
+  audits are not device or visual evidence; runtime acceptance requires the
+  exact markers in `docs/native-opengl.md`.
+
 ## Apple Metal backend rules
 
 - Metal is an additive preview backend for macOS and iOS. Existing OpenGL and

@@ -55,6 +55,9 @@ namespace Microsoft.Xna.Framework.Content
             'A', // macOS Metal
             'I', // iOS Metal
             'K', // Android Vulkan
+            'E', // Android Native OpenGL ES
+            'U', // iOS Native OpenGL ES
+            'L', // Desktop Native OpenGL
 
             // NOTE: There are additional identifiers for consoles that
             // are not defined in this repository.  Be sure to ask the

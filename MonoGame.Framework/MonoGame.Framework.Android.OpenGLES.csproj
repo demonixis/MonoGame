@@ -1,0 +1,100 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <TargetPlatformVersion>36.0</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
+    <CheckEolWorkloads>false</CheckEolWorkloads>
+    <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    <AndroidManifest>Platform/Android/AndroidManifest.NativeOpenGLES.xml</AndroidManifest>
+    <DefineConstants>ANDROID;NATIVE_GLES;NATIVE_GRAPHICS;STBSHARP_INTERNAL</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>The MonoGame runtime for Android ARM64 using strict Native OpenGL ES 3.0.</Description>
+    <PackageTags>monogame;android;opengles;native</PackageTags>
+    <PackageId>MonoGame.Framework.Android.OpenGLES</PackageId>
+    <AppendTargetFrameworkToOutputPath>False</AppendTargetFrameworkToOutputPath>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageReadmeFile>README-packages.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AndroidOpenGlesNativeConfiguration Condition="'$(AndroidOpenGlesNativeConfiguration)' == '' and Exists('../Artifacts/native/mgruntime/androidgles/android-arm64/$(Configuration)/libmgruntime.so')">$(Configuration)</AndroidOpenGlesNativeConfiguration>
+    <AndroidOpenGlesNativeConfiguration Condition="'$(AndroidOpenGlesNativeConfiguration)' == ''">Release</AndroidOpenGlesNativeConfiguration>
+    <AndroidOpenGlesNativeArtifact>../Artifacts/native/mgruntime/androidgles/android-arm64/$(AndroidOpenGlesNativeConfiguration)/libmgruntime.so</AndroidOpenGlesNativeArtifact>
+  </PropertyGroup>
+
+  <Import Project="MonoGame.Framework.Native.Graphics.targets" />
+
+  <ItemGroup>
+    <None Include="../README-packages.md" Pack="true" PackagePath="\" />
+    <None Include="MonoGame.Framework.Android.OpenGLES.targets" Pack="true" PackagePath="buildTransitive" />
+    <None Include="$(AndroidOpenGlesNativeArtifact)" Pack="true" PackagePath="runtimes/android-arm64/native/libmgruntime.so" />
+    <AndroidNativeLibrary Include="$(AndroidOpenGlesNativeArtifact)">
+      <Abi>arm64-v8a</Abi>
+      <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    </AndroidNativeLibrary>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin/**" />
+    <Compile Remove="obj/**" />
+    <Compile Remove="Platform/**" />
+    <Compile Remove="Properties/**" />
+    <Compile Remove="Utilities/System.Numerics.Vectors/**" />
+    <Compile Remove="Devices/**" />
+    <Compile Remove="GraphicsDeviceManager.cs" />
+    <Compile Remove="Input/Keyboard.cs" />
+    <None Remove="Platform/**" />
+    <None Remove="Utilities/System.Numerics.Vectors/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Platform/Android/AndroidManifest.NativeOpenGLES.xml" Pack="true" PackagePath="buildTransitive/MonoGame.Framework.Android.OpenGLES.AndroidManifest.xml" />
+    <Compile Include="@(MonoGameNativeGraphicsSource)" />
+    <Compile Include="Platform/Native/PlatformInfo.NativeOpenGL.cs" />
+    <Compile Include="Platform/Android/AndroidCompatibility.cs" />
+    <Compile Include="Platform/Android/AndroidGameActivity.cs" />
+    <Compile Include="Platform/Android/AndroidGamePlatform.cs" />
+    <Compile Include="Platform/Android/AndroidGameWindow.cs" />
+    <Compile Include="Platform/Android/Devices/Sensors/Accelerometer.cs" />
+    <Compile Include="Platform/Android/Devices/Sensors/Compass.cs" />
+    <Compile Include="Platform/Android/Input/Keyboard.cs" />
+    <Compile Include="Platform/Android/Input/Touch/AndroidTouchEventManager.cs" />
+    <Compile Include="Platform/Android/IResumeManager.cs" />
+    <Compile Include="Platform/Android/MonoGameAndroidGameView.cs" />
+    <Compile Include="Platform/Android/MonoGameAndroidOpenGlesGameView.cs" />
+    <Compile Include="Platform/Android/OrientationListener.cs" />
+    <Compile Include="Platform/Android/ResumeManager.cs" />
+    <Compile Include="Platform/Android/ScreenReceiver.cs" />
+    <Compile Include="Platform/Audio/Xact/WaveBank.Default.cs" />
+    <Compile Include="Platform/GamePlatform.Mobile.cs" />
+    <Compile Include="Platform/Graphics/IGraphicsContext.OpenGL.cs" />
+    <Compile Include="Platform/Graphics/IWindowInfo.OpenGL.cs" />
+    <Compile Include="Platform/Graphics/OpenGL.Android.cs" />
+    <Compile Include="Platform/Graphics/OpenGL.Common.cs" />
+    <Compile Include="Platform/Graphics/OpenGL.cs" />
+    <Compile Include="Platform/GraphicsDeviceManager.Legacy.cs" />
+    <Compile Include="Platform/Input/GamePad.Android.cs" />
+    <Compile Include="Platform/Input/Joystick.Default.cs" />
+    <Compile Include="Platform/Input/KeyboardInput.Android.cs" />
+    <Compile Include="Platform/Input/MessageBox.Android.cs" />
+    <Compile Include="Platform/Input/Mouse.Default.cs" />
+    <Compile Include="Platform/Input/MouseCursor.Default.cs" />
+    <Compile Include="Platform/Media/MediaPlayer.Default.cs" />
+    <Compile Include="Platform/PrimaryThreadLoader.cs" />
+    <Compile Include="Platform/Threading.cs" />
+    <Compile Include="Platform/TitleContainer.Android.cs" />
+    <Compile Include="Platform/Utilities/FuncLoader.Android.cs" />
+    <Compile Include="Platform/Utilities/InteropHelpers.cs" />
+    <Compile Include="Platform/Utilities/ReflectionHelpers.Default.cs" />
+    <Compile Include="../ThirdParty/StbImageSharp/src/**/*.cs" Exclude="../ThirdParty/StbImageSharp/src/bin/**/*.cs;../ThirdParty/StbImageSharp/src/obj/**/*.cs" LinkBase="Utilities/StbImageSharp" />
+    <Compile Include="../ThirdParty/StbImageWriteSharp/src/**/*.cs" Exclude="../ThirdParty/StbImageWriteSharp/src/bin/**/*.cs;../ThirdParty/StbImageWriteSharp/src/obj/**/*.cs" LinkBase="Utilities/StbImageWriteSharp" />
+  </ItemGroup>
+
+  <Import Project="Platform/OpenAL.targets" />
+  <Import Project="MonoGame.Framework.Devices.Sensors.targets" />
+
+  <Target Name="ValidateAndroidOpenGlesNativeArtifact" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(AndroidOpenGlesNativeArtifact)')" Text="The Android Native GLES runtime was not found at '$(AndroidOpenGlesNativeArtifact)'. Run native/monogame/android-opengles/build-android.sh $(AndroidOpenGlesNativeConfiguration)." />
+  </Target>
+</Project>

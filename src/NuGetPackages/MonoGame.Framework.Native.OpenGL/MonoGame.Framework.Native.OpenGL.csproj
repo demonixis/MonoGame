@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>MonoGame Native with the additive OpenGL 4.1 Core desktop runtime.</Description>
+    <PackageTags>monogame;native;opengl;desktop</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="MonoGame.Framework.Native.OpenGL.targets" Pack="true" PackagePath="buildTransitive" />
+    <ProjectReference Include="../../../MonoGame.Framework/MonoGame.Framework.Native.csproj" />
+    <ProjectReference Include="../MonoGame.Runtime.Mac.OpenGL/MonoGame.Runtime.Mac.OpenGL.csproj" />
+    <ProjectReference Include="../MonoGame.Runtime.Windows.OpenGL/MonoGame.Runtime.Windows.OpenGL.csproj" />
+    <ProjectReference Include="../MonoGame.Runtime.Linux.OpenGL/MonoGame.Runtime.Linux.OpenGL.csproj" />
+  </ItemGroup>
+
+</Project>

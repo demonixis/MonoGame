@@ -45,6 +45,12 @@ We support a growing list of platforms across the desktop, mobile, and console s
 > [!NOTE]
 > Vulkan and DirectX12 graphics support is also being added in **preview** for `3.8.5` for supported platforms.
 
+> [!NOTE]
+> This fork also contains an additive native OpenGL/OpenGL ES preview for
+> Android, iOS and desktop. It uses explicit packages and content profiles and
+> does not replace the existing OpenGL implementation. See
+> [the native OpenGL guide](docs/native-opengl.md).
+
 [^1]: An experimental Vulkan implementation is available to source code users.
 
 [^2]: An experimental DirectX 12 implementation is available to source code users.

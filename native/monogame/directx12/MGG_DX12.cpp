@@ -592,6 +592,38 @@ void MGG_GraphicsDevice_GetCaps(MGG_GraphicsDevice* device, MGG_GraphicsDevice_C
 	caps.TextureCompression = MGTextureCompressionCapabilities::S3tc;
 }
 
+MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
+	MGG_GraphicsDevice* device,
+	MGG_GraphicsDevice_CapsV2& caps,
+	mguint capsSize)
+{
+	if (device == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+	if (capsSize < sizeof(caps.StructSize) + sizeof(caps.AbiVersion))
+		return MGGraphicsDeviceStatus::InsufficientSize;
+
+	MGG_GraphicsDevice_Caps legacy{};
+	MGG_GraphicsDevice_GetCaps(device, legacy);
+	MGG_GraphicsDevice_CapsV2 value{};
+	value.StructSize = sizeof(value);
+	value.AbiVersion = 2;
+	value.ApiMajor = 12;
+	value.ApiMinor = 0;
+	value.MaxTextureSlots = legacy.MaxTextureSlots;
+	value.MaxVertexTextureSlots = legacy.MaxVertexTextureSlots;
+	value.MaxVertexBufferSlots = legacy.MaxVertexBufferSlots;
+	value.ShaderProfile = legacy.ShaderProfile;
+	value.MaxMultiSampleCount = legacy.MaxMultiSampleCount;
+	value.TextureCompression = legacy.TextureCompression;
+	value.Features = MGNativeGraphicsFeatures::AnisotropicFiltering;
+	value.MaxAnisotropy = 16.0f;
+	value.MaxRenderTargets = 4;
+	value.MaxDrawBuffers = 4;
+	value.MaxColorAttachments = 4;
+	std::memcpy(&caps, &value, std::min(capsSize, static_cast<mguint>(sizeof(value))));
+	return MGGraphicsDeviceStatus::Success;
+}
+
 void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
 {
 	assert(device != nullptr);
@@ -940,6 +972,27 @@ void MGG_GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture
 
 		device->context->SetRenderTarget(colorTargets.data(), arraySlices, count, targets[0]->depthTexture);
 	}
+}
+
+MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderTargetsV2(
+	MGG_GraphicsDevice* device,
+	MGG_Texture** targets,
+	mgint* arraySlices,
+	mgint count)
+{
+	if (device == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+	if (count < 0 || count > 4)
+		return MGGraphicsDeviceStatus::InvalidRenderTargetCount;
+	if (count > 0 && targets == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+	for (mgint index = 0; index < count; ++index)
+	{
+		if (targets[index] == nullptr)
+			return MGGraphicsDeviceStatus::InvalidRenderTarget;
+	}
+	MGG_GraphicsDevice_SetRenderTargets(device, targets, arraySlices, count);
+	return MGGraphicsDeviceStatus::Success;
 }
 
 void MGG_GraphicsDevice_GetBackBufferData(MGG_GraphicsDevice* device, mgint x, mgint y, mgint width, mgint height, void* data, mgint count, mgint dataBytes)

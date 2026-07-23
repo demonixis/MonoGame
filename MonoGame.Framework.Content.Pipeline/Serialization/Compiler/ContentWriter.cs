@@ -60,6 +60,9 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Serialization.Compiler
             'A', // macOS Metal
             'I', // iOS Metal
             'K', // Android Vulkan
+            'E', // Android Native OpenGL ES
+            'U', // iOS Native OpenGL ES
+            'L', // Desktop Native OpenGL
         };
 
         /// <summary>
