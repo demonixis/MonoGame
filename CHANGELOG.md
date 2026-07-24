@@ -11,8 +11,10 @@
 
 ### Fixed
 
+- Native Metal now caches render pipeline variants across render-target switches, avoids redundant pipeline-state invalidation, and bounds retries after a transient compiler-service failure to once per variant per frame.
 - Mobile OpenGL builds no longer select the SDL-only OpenXR interop branch, Android logging binds the platform namespace explicitly, and platform-specific intermediate paths cannot leak generated `obj`/`bin` sources into sibling heads.
 - Native OpenGL effects now reflect stage-qualified GLSL block names, track `mgfx-spvc` as an incremental MGCB dependency, and preserve single-face `RenderTargetCube` bindings used by reflection probes instead of producing stale black or corrupt frames.
+- Native Vulkan offscreen render passes now publish color-attachment writes to subsequent fragment-shader reads and wait for earlier shader reads before overwriting a target, fixing same-frame MRT/G-buffer sampling that could return cleared pixels on MoltenVK.
 
 ## 3.8.4 Release - April 2nd - 2025
 

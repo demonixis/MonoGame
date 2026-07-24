@@ -14,9 +14,11 @@
 #include <algorithm>
 #include <climits>
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -164,6 +166,7 @@ struct MGG_Texture
 
 struct MGG_Shader
 {
+    uint64_t pipelineResourceId = 0;
     MGShaderStage stage = MGShaderStage::Vertex;
     __strong id<MTLLibrary> library = nil;
     __strong id<MTLFunction> function = nil;
@@ -181,12 +184,14 @@ struct MGG_Shader
 
 struct MGG_InputLayout
 {
+    uint64_t pipelineResourceId = 0;
     __strong MTLVertexDescriptor* descriptor = nil;
     std::vector<uint32_t> strides;
 };
 
 struct MGG_BlendState
 {
+    uint64_t pipelineResourceId = 0;
     MGG_BlendState_Info targets[MGMetalMaxColorTargets] = {};
 };
 
@@ -216,6 +221,63 @@ struct MGMetalVertexBinding
 {
     MGG_Buffer* buffer = nullptr;
     int offset = 0;
+};
+
+struct MGMetalPipelineKey
+{
+    uint64_t vertexShaderId = 0;
+    uint64_t pixelShaderId = 0;
+    uint64_t inputLayoutId = 0;
+    uint64_t blendStateId = 0;
+    uint64_t colorFormats[MGMetalMaxColorTargets] = {};
+    uint64_t depthFormat = 0;
+    uint32_t sampleCount = 1;
+    uint32_t colorCount = 0;
+
+    bool operator==(const MGMetalPipelineKey& other) const
+    {
+        return vertexShaderId == other.vertexShaderId &&
+            pixelShaderId == other.pixelShaderId &&
+            inputLayoutId == other.inputLayoutId &&
+            blendStateId == other.blendStateId &&
+            depthFormat == other.depthFormat &&
+            sampleCount == other.sampleCount &&
+            colorCount == other.colorCount &&
+            memcmp(colorFormats, other.colorFormats, sizeof(colorFormats)) == 0;
+    }
+};
+
+struct MGMetalPipelineKeyHash
+{
+    size_t operator()(const MGMetalPipelineKey& key) const
+    {
+        size_t hash = 1469598103934665603ull;
+        const uint64_t values[] = {
+            key.vertexShaderId,
+            key.pixelShaderId,
+            key.inputLayoutId,
+            key.blendStateId,
+            key.depthFormat,
+            key.sampleCount,
+            key.colorCount,
+            key.colorFormats[0],
+            key.colorFormats[1],
+            key.colorFormats[2],
+            key.colorFormats[3]
+        };
+        for (uint64_t value : values)
+        {
+            hash ^= (size_t)value;
+            hash *= 1099511628211ull;
+        }
+        return hash;
+    }
+};
+
+struct MGMetalPipelineCacheEntry
+{
+    MGMetalPipelineKey key = {};
+    __strong id<MTLRenderPipelineState> pipeline = nil;
 };
 
 struct MGG_GraphicsDevice
@@ -257,6 +319,16 @@ struct MGG_GraphicsDevice
     MGG_Texture* textures[2][16] = {};
     MGG_SamplerState* samplers[2][16] = {};
     MGMetalBindingArena bindingArenas[3];
+    std::unordered_map<MGMetalPipelineKey, size_t, MGMetalPipelineKeyHash> pipelineLookup;
+    std::unordered_map<MGMetalPipelineKey, uint64_t, MGMetalPipelineKeyHash> pipelineFailureFrame;
+    std::vector<MGMetalPipelineCacheEntry> pipelineCache;
+    uint64_t nextPipelineResourceId = 1;
+    uint64_t frameSerial = 0;
+    uint64_t pipelineRequestCount = 0;
+    uint64_t pipelineCompileCount = 0;
+    uint64_t pipelineCacheHitCount = 0;
+    uint64_t pipelineFailureCount = 0;
+    bool pipelineTrace = false;
     bool pipelineDirty = true;
 };
 
@@ -873,20 +945,49 @@ static bool MGMetalUpdatePipeline(MGG_GraphicsDevice* device)
         device->vertexShader->function == nil || device->pixelShader->function == nil)
         return false;
 
+    MGMetalPipelineKey key = {};
+    key.vertexShaderId = device->vertexShader->pipelineResourceId;
+    key.pixelShaderId = device->pixelShader->pipelineResourceId;
+    key.inputLayoutId = device->inputLayout == nullptr ? 0 : device->inputLayout->pipelineResourceId;
+    key.blendStateId = device->blendState == nullptr ? 0 : device->blendState->pipelineResourceId;
+    key.sampleCount = (uint32_t)(device->renderTargetCount == 0 ?
+        device->sampleCount : device->renderTargets[0]->sampleCount);
+    key.depthFormat = (uint64_t)MGMetalCurrentDepthFormat(device);
+    key.colorCount = (uint32_t)(device->renderTargetCount == 0 ? 1 : device->renderTargetCount);
+    for (uint32_t i = 0; i < key.colorCount; ++i)
+        key.colorFormats[i] = (uint64_t)MGMetalCurrentColorFormat(device, (int)i);
+
+    ++device->pipelineRequestCount;
+    const auto cached = device->pipelineLookup.find(key);
+    if (cached != device->pipelineLookup.end())
+    {
+        device->pipeline = device->pipelineCache[cached->second].pipeline;
+        device->pipelineDirty = false;
+        ++device->pipelineCacheHitCount;
+        return true;
+    }
+
+    // A compiler-service interruption can otherwise make every draw using the
+    // same variant retry synchronously and amplify one transient failure into a
+    // frame-long compile storm.  Retry failed variants on the next frame.
+    const auto failed = device->pipelineFailureFrame.find(key);
+    if (failed != device->pipelineFailureFrame.end() && failed->second == device->frameSerial)
+        return false;
+
     MTLRenderPipelineDescriptor* descriptor = [MTLRenderPipelineDescriptor new];
     descriptor.vertexFunction = device->vertexShader->function;
     descriptor.fragmentFunction = device->pixelShader->function;
     descriptor.vertexDescriptor = device->inputLayout == nullptr ? nil : device->inputLayout->descriptor;
-    descriptor.rasterSampleCount = device->renderTargetCount == 0 ? device->sampleCount : device->renderTargets[0]->sampleCount;
-    descriptor.depthAttachmentPixelFormat = MGMetalCurrentDepthFormat(device);
+    descriptor.rasterSampleCount = key.sampleCount;
+    descriptor.depthAttachmentPixelFormat = (MTLPixelFormat)key.depthFormat;
     if (descriptor.depthAttachmentPixelFormat == MTLPixelFormatDepth32Float_Stencil8)
         descriptor.stencilAttachmentPixelFormat = descriptor.depthAttachmentPixelFormat;
 
-    const int colorCount = device->renderTargetCount == 0 ? 1 : device->renderTargetCount;
+    const int colorCount = (int)key.colorCount;
     for (int i = 0; i < colorCount; ++i)
     {
         MTLRenderPipelineColorAttachmentDescriptor* color = descriptor.colorAttachments[i];
-        color.pixelFormat = MGMetalCurrentColorFormat(device, i);
+        color.pixelFormat = (MTLPixelFormat)key.colorFormats[i];
         if (device->blendState == nullptr)
             continue;
 
@@ -905,13 +1006,60 @@ static bool MGMetalUpdatePipeline(MGG_GraphicsDevice* device)
     }
 
     NSError* error = nil;
+    ++device->pipelineCompileCount;
     device->pipeline = [device->device newRenderPipelineStateWithDescriptor:descriptor error:&error];
     if (device->pipeline == nil)
     {
-        fprintf(stderr, "Metal pipeline creation failed: %s\n", error.localizedDescription.UTF8String);
+        ++device->pipelineFailureCount;
+        device->pipelineFailureFrame[key] = device->frameSerial;
+        fprintf(
+            stderr,
+            "Metal pipeline creation failed: compile=%llu failures=%llu frame=%llu "
+            "vs=%llu ps=%llu layout=%llu blend=%llu colors=%u samples=%u depth=%llu "
+            "formats=[%llu,%llu,%llu,%llu]: %s\n",
+            (unsigned long long)device->pipelineCompileCount,
+            (unsigned long long)device->pipelineFailureCount,
+            (unsigned long long)device->frameSerial,
+            (unsigned long long)key.vertexShaderId,
+            (unsigned long long)key.pixelShaderId,
+            (unsigned long long)key.inputLayoutId,
+            (unsigned long long)key.blendStateId,
+            key.colorCount,
+            key.sampleCount,
+            (unsigned long long)key.depthFormat,
+            (unsigned long long)key.colorFormats[0],
+            (unsigned long long)key.colorFormats[1],
+            (unsigned long long)key.colorFormats[2],
+            (unsigned long long)key.colorFormats[3],
+            error == nil ? "unknown error" : error.localizedDescription.UTF8String);
         return false;
     }
 
+    const size_t cacheIndex = device->pipelineCache.size();
+    MGMetalPipelineCacheEntry entry;
+    entry.key = key;
+    entry.pipeline = device->pipeline;
+    device->pipelineCache.push_back(std::move(entry));
+    device->pipelineLookup.emplace(key, cacheIndex);
+    device->pipelineFailureFrame.erase(key);
+    if (device->pipelineTrace)
+    {
+        fprintf(
+            stderr,
+            "Metal pipeline compiled: compile=%llu requests=%llu hits=%llu cache=%zu "
+            "vs=%llu ps=%llu layout=%llu blend=%llu colors=%u samples=%u depth=%llu\n",
+            (unsigned long long)device->pipelineCompileCount,
+            (unsigned long long)device->pipelineRequestCount,
+            (unsigned long long)device->pipelineCacheHitCount,
+            device->pipelineCache.size(),
+            (unsigned long long)key.vertexShaderId,
+            (unsigned long long)key.pixelShaderId,
+            (unsigned long long)key.inputLayoutId,
+            (unsigned long long)key.blendStateId,
+            key.colorCount,
+            key.sampleCount,
+            (unsigned long long)key.depthFormat);
+    }
     device->pipelineDirty = false;
     return true;
 }
@@ -1082,6 +1230,8 @@ MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_Gr
     device->device = adapter->device;
     device->queue = [device->device newCommandQueue];
     device->inFlight = dispatch_semaphore_create(3);
+    const char* pipelineTrace = getenv("MONOGAME_METAL_PIPELINE_TRACE");
+    device->pipelineTrace = pipelineTrace != nullptr && strcmp(pipelineTrace, "1") == 0;
     if (device->queue == nil)
     {
         delete device;
@@ -1246,6 +1396,7 @@ mgint MGG_GraphicsDevice_BeginFrame(MGG_GraphicsDevice* device)
         return -1;
     }
     device->frame = (device->frame + 1) % 3;
+    ++device->frameSerial;
     device->bindingArenas[device->frame].offset = 0;
     return device->frame;
 }
@@ -1339,8 +1490,11 @@ void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState
 {
     if (device == nullptr)
         return;
-    device->blendState = state;
-    device->pipelineDirty = true;
+    if (device->blendState != state)
+    {
+        device->blendState = state;
+        device->pipelineDirty = true;
+    }
     if (MGMetalEnsureEncoder(device))
         [device->encoder setBlendColorRed:factorR green:factorG blue:factorB alpha:factorA];
 }
@@ -1481,15 +1635,25 @@ void MGG_GraphicsDevice_SetShader(MGG_GraphicsDevice* device, MGShaderStage stag
         (shader != nullptr && shader->stage != stage))
         return;
     if (stage == MGShaderStage::Vertex)
+    {
+        if (device->vertexShader == shader)
+            return;
         device->vertexShader = shader;
+    }
     else
+    {
+        if (device->pixelShader == shader)
+            return;
         device->pixelShader = shader;
+    }
     device->pipelineDirty = true;
 }
 
 void MGG_GraphicsDevice_SetInputLayout(MGG_GraphicsDevice* device, MGG_InputLayout* layout)
 {
     if (device == nullptr)
+        return;
+    if (device->inputLayout == layout)
         return;
     device->inputLayout = layout;
     device->pipelineDirty = true;
@@ -1641,10 +1805,10 @@ void MGG_GraphicsDevice_GetBackBufferData(MGG_GraphicsDevice* device, mgint x, m
 
 MGG_BlendState* MGG_BlendState_Create(MGG_GraphicsDevice* device, MGG_BlendState_Info* infos)
 {
-    (void)device;
-    if (infos == nullptr)
+    if (device == nullptr || infos == nullptr)
         return nullptr;
     auto state = new MGG_BlendState();
+    state->pipelineResourceId = device->nextPipelineResourceId++;
     memcpy(state->targets, infos, sizeof(state->targets));
     return state;
 }
@@ -2073,9 +2237,8 @@ static bool MGMetalParseShaderReflection(MGG_Shader* shader)
 
 MGG_InputLayout* MGG_InputLayout_Create(MGG_GraphicsDevice* device, MGG_Shader* vertexShader, mgint* strides, mgint streamCount, MGG_InputElement* elements, mgint elementCount)
 {
-    (void)device;
     (void)vertexShader;
-    if (streamCount < 0 || streamCount > (mgint)MGMetalMaxVertexBuffers ||
+    if (device == nullptr || streamCount < 0 || streamCount > (mgint)MGMetalMaxVertexBuffers ||
         elementCount < 0 || elementCount > (mgint)MGMetalMaxVertexAttributes ||
         (streamCount > 0 && strides == nullptr) || (elementCount > 0 && elements == nullptr))
         return nullptr;
@@ -2093,6 +2256,7 @@ MGG_InputLayout* MGG_InputLayout_Create(MGG_GraphicsDevice* device, MGG_Shader* 
     }
 
     auto layout = new MGG_InputLayout();
+    layout->pipelineResourceId = device->nextPipelineResourceId++;
     layout->descriptor = [MTLVertexDescriptor vertexDescriptor];
     layout->strides.resize(streamCount);
     for (int i = 0; i < streamCount; ++i)
@@ -2249,6 +2413,7 @@ MGG_Shader* MGG_Shader_Create(MGG_GraphicsDevice* device, MGShaderStage stage, m
         delete shader;
         return nullptr;
     }
+    shader->pipelineResourceId = device->nextPipelineResourceId++;
     return shader;
 }
 
