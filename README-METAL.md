@@ -95,6 +95,16 @@ CPU-visible resources use shared storage on Apple GPUs. On Intel/AMD Macs, the
 backend uses managed storage and performs the required explicit
 synchronization.
 
+`GraphicsDevice.SupportsCompletedGpuFrameTiming` reports whether the loaded
+native ABI can publish completed presentation timings. When supported,
+`TryDequeueCompletedGpuFrameTiming(out GpuFrameTiming)` is non-blocking. Metal
+assigns one submission identifier per `Present` and publishes
+`GPUStartTime`/`GPUEndTime` only from a successfully completed command-buffer
+handler. CPU waits, display presentation latency, auxiliary readbacks and
+`SubmitWithoutPresent` are outside the interval. The native queue holds 64
+results; saturation drops the oldest result and increments the cumulative
+`DroppedTimingCount`, which invalidates a performance qualification run.
+
 ## Shader pipeline
 
 The only supported compilation path is:
@@ -513,8 +523,8 @@ must at least:
 - validate all six stock effects and a representative set of custom effects
   under Metal API/GPU Validation;
 - run the shader smoke test on a signed physical iPhone/iPad arm64 device;
-- qualify macOS resize, fullscreen, multiple displays, sleep/wake, and
-  temporary drawable loss;
+- qualify macOS continuous-resize soak, fullscreen, multiple displays,
+  sleep/wake, and temporary drawable loss;
 - qualify iOS with AOT and trimming, rotations, background/foreground,
   memory pressure, recovery, and frame pacing;
 - complete long-running tests, deferred-resource-destruction tests, and

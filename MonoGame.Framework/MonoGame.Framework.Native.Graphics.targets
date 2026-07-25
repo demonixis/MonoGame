@@ -15,6 +15,7 @@
     <MonoGameNativeGraphicsSource Include="Platform\Native\GraphicsCapabilities.Native.cs" />
     <MonoGameNativeGraphicsSource Include="Platform\Native\GraphicsDebug.Native.cs" />
     <MonoGameNativeGraphicsSource Include="Platform\Native\GraphicsDevice.Native.cs" />
+    <MonoGameNativeGraphicsSource Include="Platform\Native\GpuFrameTiming.Native.cs" />
     <MonoGameNativeGraphicsSource Include="Platform\Native\Image.Interop.cs" />
     <MonoGameNativeGraphicsSource Include="Platform\Native\IndexBuffer.Native.cs" />
     <MonoGameNativeGraphicsSource Include="Platform\Native\MGHandleAttribute.cs" />

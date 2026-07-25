@@ -87,6 +87,14 @@ internal struct MGG_GraphicsDevice_CapsV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct MGG_GpuFrameTiming
+{
+    public ulong SubmissionId;
+    public ulong DurationNanoseconds;
+    public ulong DroppedTimingCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct MGG_OpenXrGraphicsBinding
 {
     public int Api;
@@ -120,6 +128,7 @@ internal enum NativeGraphicsFeatures : uint
 {
     None = 0,
     AnisotropicFiltering = 1 << 0,
+    CompletedGpuFrameTiming = 1 << 1,
 }
 
 internal enum GraphicsDeviceStatus
@@ -369,6 +378,11 @@ internal static unsafe partial class MGG
 
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_Present", ExactSpelling = true)]
     public static extern void GraphicsDevice_Present(MGG_GraphicsDevice* device, int currentFrame, int syncInterval);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_TryDequeueCompletedGpuFrameTiming", ExactSpelling = true)]
+    public static extern byte GraphicsDevice_TryDequeueCompletedGpuFrameTiming(
+        MGG_GraphicsDevice* device,
+        out MGG_GpuFrameTiming timing);
 
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SetBlendState", ExactSpelling = true)]
     public static extern void GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, float factorR, float factorG, float factorB, float factorA);

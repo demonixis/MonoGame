@@ -70,6 +70,15 @@ Upstream doesn't allow LLM-generated contributions BUT this fork is private and 
   blocking or crashing.
 - Capabilities must be queried from the selected device. Do not advertise a
   format, MSAA level, resource limit, or feature because another backend has it.
+- Completed GPU frame timing is an optional native capability. Metal and Vulkan
+  measure only the GPU command submission associated with `Present`, publish
+  completed results through the bounded queue, and report cumulative loss.
+  Callers must check the capability before resolving the optional ABI symbol;
+  OpenGL, Direct3D 12 and older native libraries remain valid without it.
+- Vulkan swapchain creation must honor a fixed `currentExtent`, keep requested
+  and realized sizes separate, and retain usable `VK_SUBOPTIMAL_KHR` images.
+  Finish all references to the current frame before rebuilding image-dependent
+  arrays, and never perturb the SDL window position to force recreation.
 - The experimental OpenXR bridge is additive and backend-neutral at its public
   surface. It may expose opaque handles, bootstrap Vulkan/DX12/Metal with the
   runtime-required adapter/device, wrap external color images without owning

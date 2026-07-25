@@ -34,7 +34,6 @@ struct ReverbSettings
     mgfloat RoomSizeFeet;
     mgfloat WetDryMixPct;
 };
-
 struct Vector3
 {
     mgfloat X;
@@ -154,6 +153,13 @@ struct Vector4
     mgfloat Y;
     mgfloat Z;
     mgfloat W;
+};
+
+struct MGG_GpuFrameTiming
+{
+    mgulong SubmissionId;
+    mgulong DurationNanoseconds;
+    mgulong DroppedTimingCount;
 };
 
 struct MGG_BlendState_Info

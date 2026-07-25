@@ -117,6 +117,16 @@ namespace MonoGame.Tests.Graphics
         }
 
         [Test]
+        public void CompletedGpuTimingDoesNotCallAnUnsupportedNativeBackend()
+        {
+            Assert.IsFalse(gd.SupportsCompletedGpuFrameTiming);
+            Assert.IsFalse(gd.TryDequeueCompletedGpuFrameTiming(out var timing));
+            Assert.AreEqual(0ul, timing.SubmissionId);
+            Assert.AreEqual(0ul, timing.DurationNanoseconds);
+            Assert.AreEqual(0ul, timing.DroppedTimingCount);
+        }
+
+        [Test]
         public void BuffersTexture3DAndMrtShaderReadback()
         {
             using (var vertexBuffer = new VertexBuffer(gd, typeof(VertexPositionColor), 3, BufferUsage.None))
@@ -278,6 +288,46 @@ namespace MonoGame.Tests.Graphics
             finally
             {
                 gd.Reset(original);
+            }
+        }
+
+        [Test]
+        public void NativeWindowClientResizeUpdatesPresentation()
+        {
+            var originalWidth = gd.PresentationParameters.BackBufferWidth;
+            var originalHeight = gd.PresentationParameters.BackBufferHeight;
+            var resizedWidth = originalWidth + 17;
+            var resizedHeight = originalHeight + 11;
+            var clientSizeChangedCount = 0;
+            EventHandler<EventArgs> handler = (_, _) => ++clientSizeChangedCount;
+            game.Window.ClientSizeChanged += handler;
+
+            try
+            {
+                ((NativeGameWindow)game.Window).ClientResize(resizedWidth, resizedHeight);
+
+                Assert.AreEqual(1, clientSizeChangedCount);
+                Assert.AreEqual(resizedWidth, game.Window.ClientBounds.Width);
+                Assert.AreEqual(resizedHeight, game.Window.ClientBounds.Height);
+                Assert.AreEqual(resizedWidth, gd.PresentationParameters.BackBufferWidth);
+                Assert.AreEqual(resizedHeight, gd.PresentationParameters.BackBufferHeight);
+                Assert.AreEqual(resizedWidth, gd.Viewport.Width);
+                Assert.AreEqual(resizedHeight, gd.Viewport.Height);
+
+                gd.Clear(Color.CornflowerBlue);
+                var pixel = new Color[1];
+                gd.GetBackBufferData(
+                    new Rectangle(resizedWidth / 2, resizedHeight / 2, 1, 1),
+                    pixel,
+                    0,
+                    1);
+                Assert.AreEqual(Color.CornflowerBlue, pixel[0]);
+                Assert.DoesNotThrow(() => gd.Present());
+            }
+            finally
+            {
+                game.Window.ClientSizeChanged -= handler;
+                ((NativeGameWindow)game.Window).ClientResize(originalWidth, originalHeight);
             }
         }
 

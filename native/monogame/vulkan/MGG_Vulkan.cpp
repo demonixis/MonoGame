@@ -5,6 +5,11 @@
 #include "api_MGG.h"
 
 #include "mg_common.h"
+#include "../common/MG_FrameTiming.h"
+
+#include <cmath>
+#include <cstdlib>
+#include <limits>
 
 #include "AlphaTestEffect.vk.mgfxo.h"
 #include "BasicEffect.vk.mgfxo.h"
@@ -218,6 +223,10 @@ struct MGVK_Frame
 	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 	VkSemaphore imageAcquiredSemaphore = VK_NULL_HANDLE;
 	VkFence completedFence = VK_NULL_HANDLE;
+	VkQueryPool timingQueryPool = VK_NULL_HANDLE;
+	bool timingStarted = false;
+	bool timingPending = false;
+	uint64_t timingSubmissionId = 0;
 };
 
 struct MGVK_Swapchain
@@ -302,6 +311,8 @@ struct MGG_GraphicsDevice
 	std::vector<MGVK_Frame> frames;
 	std::vector<MGVK_Swapchain> swapchains;
 
+	uint32_t requestedSwapchainWidth = 0;
+	uint32_t requestedSwapchainHeight = 0;
 	uint32_t swapchainWidth = 0;
 	uint32_t swapchainHeight = 0;
 	VkFormat colorFormat = VK_FORMAT_UNDEFINED;
@@ -325,6 +336,14 @@ struct MGG_GraphicsDevice
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 	int syncInterval = 0;
+	bool swapchainTrace = false;
+	bool swapchainAcquireOutOfDate = false;
+	uint64_t swapchainGeneration = 0;
+
+	uint32_t timestampValidBits = 0;
+	double timestampPeriodNanoseconds = 0.0;
+	uint64_t gpuPresentationSerial = 0;
+	MGG_CompletedGpuFrameTimingQueue completedGpuFrameTimings;
 
 	uint64_t vertexBuffersDirty = 0xFFFFFFFF;
 	MGG_Buffer* vertexBuffers[8] = { 0 };
@@ -539,6 +558,7 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 static VkCommandBuffer MGVK_BeginNewCommandBuffer(MGG_GraphicsDevice* device, VkCommandPool pool = VK_NULL_HANDLE);
 static void MGVK_ExecuteAndFreeCommandBuffer(MGG_GraphicsDevice* device, VkCommandBuffer commandBuffer, VkCommandPool pool = VK_NULL_HANDLE);
 static void MGVK_ProcessDescriptorCaches(MGG_GraphicsDevice* device, FrameCounter currentFrame);
+static void MGVK_CompleteFrameTiming(MGG_GraphicsDevice* device, MGVK_Frame& frame);
 static void MGVK_CmdTransitionImageLayout(
 	VkCommandBuffer cmd,
 	VkImage image,
@@ -1356,6 +1376,12 @@ static void MGVK_FlushCommands(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 		res = vkQueueWaitIdle(device->queue);
 		VK_CHECK_RESULT(res);
 	}
+
+	// A flush is an auxiliary submission, not the submission associated with
+	// Present. Its timestamp start is deliberately discarded; callers that
+	// continue recording begin a fresh timing interval.
+	frame.timingStarted = false;
+	frame.timingSubmissionId = 0;
 }
 
 static void MGVK_BufferCreate(MGG_GraphicsDevice* device, int sizeInBytes, VkBufferUsageFlags usage, VmaMemoryUsage flags, MGG_Buffer* buffer)
@@ -1453,6 +1479,8 @@ static MGG_GraphicsDevice* MGVK_GraphicsDevice_Create(
 	assert(adapter != nullptr);
 
 	auto device = new MGG_GraphicsDevice();
+	const char* swapchainTrace = getenv("MONOGAME_VULKAN_SWAPCHAIN_TRACE");
+	device->swapchainTrace = swapchainTrace != nullptr && strcmp(swapchainTrace, "1") == 0;
 
 	device->instance = system->instance;
 	device->physicalDevice = adapter->device;
@@ -1518,6 +1546,7 @@ static MGG_GraphicsDevice* MGVK_GraphicsDevice_Create(
 			if (supportsPresentation == VK_TRUE)
 			{
 				device->graphicsQueueFamily = i;
+				device->timestampValidBits = queueFamilyProps[i].timestampValidBits;
 				break;
 			}
 		}
@@ -1533,6 +1562,9 @@ static MGG_GraphicsDevice* MGVK_GraphicsDevice_Create(
 		delete device;
 		return nullptr;
 	}
+	device->timestampPeriodNanoseconds = device->timestampValidBits > 0
+		? static_cast<double>(device->deviceProperties.limits.timestampPeriod)
+		: 0.0;
 
 	VkDeviceQueueCreateInfo queueCreateInfo {};
 	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -1783,6 +1815,48 @@ static MGG_GraphicsDevice* MGVK_GraphicsDevice_Create(
 	return device;
 }
 
+static void MGVK_CompleteFrameTiming(MGG_GraphicsDevice* device, MGVK_Frame& frame)
+{
+	if (!frame.timingPending || frame.timingQueryPool == VK_NULL_HANDLE)
+		return;
+
+	uint64_t timestamps[2] = {};
+	const VkResult result = vkGetQueryPoolResults(
+		device->device,
+		frame.timingQueryPool,
+		0,
+		2,
+		sizeof(timestamps),
+		timestamps,
+		sizeof(uint64_t),
+		VK_QUERY_RESULT_64_BIT);
+	if (result == VK_SUCCESS)
+	{
+		const uint64_t mask = device->timestampValidBits >= 64
+			? std::numeric_limits<uint64_t>::max()
+			: (uint64_t(1) << device->timestampValidBits) - 1;
+		const uint64_t elapsedTicks = (timestamps[1] - timestamps[0]) & mask;
+		const double durationNanoseconds = static_cast<double>(elapsedTicks) *
+			device->timestampPeriodNanoseconds;
+		if (elapsedTicks > 0 && std::isfinite(durationNanoseconds) &&
+			durationNanoseconds > 0.0 &&
+			durationNanoseconds <= static_cast<double>(std::numeric_limits<uint64_t>::max()))
+		{
+			device->completedGpuFrameTimings.Push(
+				frame.timingSubmissionId,
+				static_cast<uint64_t>(std::llround(durationNanoseconds)));
+		}
+	}
+	else
+	{
+		printf("Completed Vulkan GPU timing query failed with VkResult %d.\n", result);
+	}
+
+	frame.timingPending = false;
+	frame.timingStarted = false;
+	frame.timingSubmissionId = 0;
+}
+
 MGG_GraphicsDevice* MGG_GraphicsDevice_Create(MGG_GraphicsSystem* system, MGG_GraphicsAdapter* adapter)
 {
 	return MGVK_GraphicsDevice_Create(system, adapter, nullptr);
@@ -1806,6 +1880,40 @@ static void MGVK_CleanupSwapChain(MGG_GraphicsDevice* device, bool queueLockHeld
 	{
 		std::lock_guard lock(device->queueMutex);
 		vkQueueWaitIdle(device->queue);
+	}
+
+	// Queue-idle can leave several completed frame queries pending. Publish them
+	// in submission order even when the current ring index is not zero.
+	while (true)
+	{
+		MGVK_Frame* oldestTimingFrame = nullptr;
+		for (auto& frame : device->frames)
+		{
+			if (!frame.timingPending)
+				continue;
+			if (oldestTimingFrame == nullptr ||
+				frame.timingSubmissionId < oldestTimingFrame->timingSubmissionId)
+				oldestTimingFrame = &frame;
+		}
+		if (oldestTimingFrame == nullptr)
+			break;
+		MGVK_CompleteFrameTiming(device, *oldestTimingFrame);
+	}
+
+	for (auto& frame : device->frames)
+	{
+		frame.is_rendering = false;
+		if (frame.is_recording)
+		{
+			const VkResult resetResult = vkResetCommandBuffer(
+				frame.commandBuffer,
+				VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+			VK_CHECK_RESULT(resetResult);
+			frame.is_recording = false;
+		}
+		frame.image_index = uint32_t(-1);
+		frame.timingStarted = false;
+		frame.timingSubmissionId = 0;
 	}
 
 	// Destroy all the frame resources.
@@ -1949,6 +2057,8 @@ void MGG_GraphicsDevice_Destroy(MGG_GraphicsDevice* device)
 
 		vkDestroySemaphore(device->device, frame.imageAcquiredSemaphore, nullptr);
 		vkDestroyFence(device->device, frame.completedFence, nullptr);
+		if (frame.timingQueryPool != VK_NULL_HANDLE)
+			vkDestroyQueryPool(device->device, frame.timingQueryPool, nullptr);
 		vkFreeCommandBuffers(device->device, device->cmdPool, 1, &frame.commandBuffer);
 	}
 
@@ -2043,11 +2153,27 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
 	}
 	else
 		value.MaxAnisotropy = 1.0f;
+	if (device->timestampValidBits > 0 && device->timestampPeriodNanoseconds > 0.0)
+	{
+		value.Features = static_cast<MGNativeGraphicsFeatures>(
+			static_cast<mguint>(value.Features) |
+			static_cast<mguint>(MGNativeGraphicsFeatures::CompletedGpuFrameTiming));
+	}
 	value.MaxRenderTargets = std::min<mgint>(4, static_cast<mgint>(device->deviceProperties.limits.maxColorAttachments));
 	value.MaxDrawBuffers = value.MaxRenderTargets;
 	value.MaxColorAttachments = device->deviceProperties.limits.maxColorAttachments;
 	std::memcpy(&caps, &value, std::min(capsSize, static_cast<mguint>(sizeof(value))));
 	return MGGraphicsDeviceStatus::Success;
+}
+
+mgbyte MGG_GraphicsDevice_TryDequeueCompletedGpuFrameTiming(
+	MGG_GraphicsDevice* device,
+	MGG_GpuFrameTiming& timing)
+{
+	if (device == nullptr)
+		return 0;
+
+	return device->completedGpuFrameTimings.TryPop(timing) ? 1 : 0;
 }
 
 void MGVK_RecreateSwapChain(
@@ -2058,11 +2184,14 @@ void MGVK_RecreateSwapChain(
 	VkFormat vkColor,
 	VkFormat vkDepth,
 	mgint multiSampleCount,
-	mgint syncInterval)
+	mgint syncInterval,
+	const char* reason)
 {
 	assert(device != nullptr);
 	if (nativeWindowHandle == nullptr)
 		return;
+	device->requestedSwapchainWidth = width;
+	device->requestedSwapchainHeight = height;
 
 	vkDeviceWaitIdle(device->device);
 
@@ -2158,36 +2287,33 @@ void MGVK_RecreateSwapChain(
 		device->window = sdl_window;
 	}
 
-	// On resize the swapchain is placed under the title bar
-	// and not in the client area for some reason.  This fixes it.
-	int wx, wy;
-	SDL_GetWindowPosition(device->window, &wx, &wy);
-	SDL_SetWindowPosition(device->window, wx+1, wy);
-	SDL_SetWindowPosition(device->window, wx, wy);
-
 #else
 #error Not Implemented
 #endif
-
-	if (width == device->swapchainWidth &&
-		height == device->swapchainHeight &&
-		vkColor == device->colorFormat &&
-		vkDepth == device->depthFormat &&
-		syncInterval == device->syncInterval &&
-		multiSampleCount == device->multiSampleCount &&
-		device->swapchain != VK_NULL_HANDLE)
-		return;
-
-	MGVK_CleanupSwapChain(device, true);
 
 	VkSurfaceCapabilitiesKHR surface_capabilities;
 	res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalDevice, device->surface, &surface_capabilities);
 	if (presentationOperationFailed(res, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"))
 		return;
 
-	// If max extent is zero'd, it means the window is minimized, and we should leave the swapchain to VK_NULL_HANDLE and stop rendering (this is done in MGP_Platform_BeforeDraw()).
-	if (surface_capabilities.maxImageExtent.width == 0 || surface_capabilities.maxImageExtent.height == 0)
+	VkExtent2D extent = surface_capabilities.currentExtent;
+	if (extent.width == std::numeric_limits<uint32_t>::max())
+	{
+		extent.width = std::clamp(width, surface_capabilities.minImageExtent.width, surface_capabilities.maxImageExtent.width);
+		extent.height = std::clamp(height, surface_capabilities.minImageExtent.height, surface_capabilities.maxImageExtent.height);
+	}
+
+	// A zero extent means the window is minimized. Leave presentation suspended until
+	// a later explicit resize or acquire reports a usable surface again.
+	if (extent.width == 0 || extent.height == 0 ||
+		surface_capabilities.maxImageExtent.width == 0 || surface_capabilities.maxImageExtent.height == 0)
+	{
+		if (device->swapchain != VK_NULL_HANDLE)
+			MGVK_CleanupSwapChain(device, true);
+		device->swapchainWidth = 0;
+		device->swapchainHeight = 0;
 		return;
+	}
 
 	// Clamp the multisample count to the max supported.
 	{
@@ -2209,9 +2335,32 @@ void MGVK_RecreateSwapChain(
 		multiSampleCount = std::clamp(multiSampleCount, 1, maxMultisampleCount);
 	}
 
-	// We apply the extent range to the entire swapchain size to avoid surface scaling and errors.
-	device->swapchainWidth = std::clamp(width, surface_capabilities.minImageExtent.width, surface_capabilities.maxImageExtent.width);
-	device->swapchainHeight = std::clamp(height, surface_capabilities.minImageExtent.height, surface_capabilities.maxImageExtent.height);
+	if (extent.width == device->swapchainWidth &&
+		extent.height == device->swapchainHeight &&
+		vkColor == device->colorFormat &&
+		vkDepth == device->depthFormat &&
+		syncInterval == device->syncInterval &&
+		multiSampleCount == device->multiSampleCount &&
+		device->swapchain != VK_NULL_HANDLE)
+	{
+		if (device->swapchainTrace)
+		{
+			printf(
+				"MONOGAME_VULKAN_SWAPCHAIN_TRACE no-op generation=%llu reason=%s requested=%ux%u extent=%ux%u\n",
+				static_cast<unsigned long long>(device->swapchainGeneration),
+				reason,
+				width,
+				height,
+				extent.width,
+				extent.height);
+		}
+		return;
+	}
+
+	MGVK_CleanupSwapChain(device, true);
+
+	device->swapchainWidth = extent.width;
+	device->swapchainHeight = extent.height;
 	device->colorFormat = vkColor;
 	device->depthFormat = vkDepth;
 	device->multiSampleCount = multiSampleCount;
@@ -2266,12 +2415,6 @@ void MGVK_RecreateSwapChain(
 			return;
 		}
 	}
-
-	// Requested swapchain extent will be clamped based on the surface's min/max extent.
-	// In most cases these will match the current extent, as specified at window/surface creation time.
-	VkExtent2D extent;
-	extent.width = device->swapchainWidth;
-	extent.height = device->swapchainHeight;
 
 	/*
 	VkSwapchainPresentScalingCreateInfoEXT scalingCreateInfo = {};
@@ -2362,6 +2505,8 @@ void MGVK_RecreateSwapChain(
 				auto& frame = device->frames[i];
 				vkDestroySemaphore(device->device, frame.imageAcquiredSemaphore, nullptr);
 				vkDestroyFence(device->device, frame.completedFence, nullptr);
+				if (frame.timingQueryPool != VK_NULL_HANDLE)
+					vkDestroyQueryPool(device->device, frame.timingQueryPool, nullptr);
 				if (frame.uniforms)
 					MGG_Buffer_Destroy(device, frame.uniforms);
 				MGVK_DestroyFrameResources(device, i, true);
@@ -2413,6 +2558,16 @@ void MGVK_RecreateSwapChain(
 			res = vkCreateFence(device->device, &fence_create_info, NULL, &frame.completedFence);
 			VK_CHECK_RESULT(res);
 			VK_SET_OBJECT_NAME(device->device, frame.completedFence, VK_OBJECT_TYPE_FENCE, "MGVK_Frame.completedFence[%d]", i);
+
+			if (device->timestampValidBits > 0)
+			{
+				VkQueryPoolCreateInfo queryPoolCreateInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
+				queryPoolCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+				queryPoolCreateInfo.queryCount = 2;
+				res = vkCreateQueryPool(device->device, &queryPoolCreateInfo, nullptr, &frame.timingQueryPool);
+				VK_CHECK_RESULT(res);
+				VK_SET_OBJECT_NAME(device->device, frame.timingQueryPool, VK_OBJECT_TYPE_QUERY_POOL, "MGVK_Frame.timingQueryPool[%d]", i);
+			}
 
 			auto& swap = device->swapchains[i];
 			res = vkCreateSemaphore(device->device, &semaphore_create_info, NULL, &swap.renderCompleteSemaphore);
@@ -2502,12 +2657,26 @@ void MGVK_RecreateSwapChain(
 		VK_CHECK_RESULT(res);
 		VK_SET_OBJECT_NAME(device->device, frame.imageAcquiredSemaphore, VK_OBJECT_TYPE_SEMAPHORE, "MGVK_Frame.imageAcquiredSemaphore");
 	}
+
+	++device->swapchainGeneration;
+	device->swapchainAcquireOutOfDate = false;
+	device->frameIndex = device->swapchainCount > 0 ? device->frame % device->swapchainCount : 0;
+	if (device->swapchainTrace)
+	{
+		printf(
+			"MONOGAME_VULKAN_SWAPCHAIN_TRACE created generation=%llu reason=%s requested=%ux%u extent=%ux%u images=%u\n",
+			static_cast<unsigned long long>(device->swapchainGeneration),
+			reason,
+			width,
+			height,
+			device->swapchainWidth,
+			device->swapchainHeight,
+			device->swapchainCount);
+	}
 }
 
-void MGVK_RecreateSwapChain(MGG_GraphicsDevice* device)
+void MGVK_RecreateSwapChain(MGG_GraphicsDevice* device, const char* reason)
 {
-	MGVK_CleanupSwapChain(device);
-
 	if (device->window == nullptr)
 	{
 		printf("Cannot recreate swapchain: window is null!\n");
@@ -2519,12 +2688,13 @@ void MGVK_RecreateSwapChain(MGG_GraphicsDevice* device)
 	MGVK_RecreateSwapChain(
 		device,
 		device->window,
-		device->swapchainWidth,
-		device->swapchainHeight,
+		device->requestedSwapchainWidth,
+		device->requestedSwapchainHeight,
 		device->colorFormat,
 		device->depthFormat,
 		device->multiSampleCount,
-		device->syncInterval);
+		device->syncInterval,
+		reason);
 
     MGG_GraphicsDevice_SetRenderTargets(device, nullptr, nullptr, 0);
 }
@@ -2556,14 +2726,6 @@ void MGG_GraphicsDevice_ResizeSwapchain(
 	if (multiSampleCount == 0)
 		multiSampleCount = 1;
 
-	// Swapchain resize should not happen manually in Vulkan, we should leave this work to
-	// vkQueuePresentKHR() and vkAcquireNextImageKHR() which will react to surface changes.
-	// We should only let this through if the swapchain needs to be created or if syncInterval has changed.
-	if (device->swapchain != VK_NULL_HANDLE &&
-		device->syncInterval == syncInterval &&
-		device->multiSampleCount == multiSampleCount)
-		return;
-
 	auto vkColor = ToVkFormat(color);
 	auto vkDepth = MGVK_SelectDepthFormat(device, depth);
 	if (depth != MGDepthFormat::None && vkDepth == VK_FORMAT_UNDEFINED)
@@ -2572,7 +2734,7 @@ void MGG_GraphicsDevice_ResizeSwapchain(
 		return;
 	}
 	
-	MGVK_RecreateSwapChain(device, surface.Handle, width, height, vkColor, vkDepth, multiSampleCount, syncInterval);
+	MGVK_RecreateSwapChain(device, surface.Handle, width, height, vkColor, vkDepth, multiSampleCount, syncInterval, "resize");
 
 	if (device->swapchain != VK_NULL_HANDLE)
 		MGVK_PrepareFrame(device);
@@ -2629,6 +2791,21 @@ void MGVK_BeginCommandBuffer(VkCommandBuffer commandBuffer)
 	//vkCmdSetDepthClampEnableEXT(commandBuffer, VK_TRUE);
 }
 
+static void MGVK_BeginPresentationTiming(MGG_GraphicsDevice* device, MGVK_Frame& frame)
+{
+	if (frame.timingQueryPool == VK_NULL_HANDLE)
+		return;
+
+	vkCmdResetQueryPool(frame.commandBuffer, frame.timingQueryPool, 0, 2);
+	vkCmdWriteTimestamp(
+		frame.commandBuffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		frame.timingQueryPool,
+		0);
+	frame.timingStarted = true;
+	frame.timingSubmissionId = 0;
+}
+
 bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 {
 	VkResult res;
@@ -2638,6 +2815,7 @@ bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 	{
 		res = vkWaitForFences(device->device, 1, &frame.completedFence, VK_TRUE, UINT64_MAX);
 		VK_CHECK_RESULT(res);
+		MGVK_CompleteFrameTiming(device, frame);
 		frame.is_rendering = false;
 	}
 
@@ -2649,7 +2827,7 @@ bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 		if (res == VK_ERROR_OUT_OF_DATE_KHR)
 		{
 			frame.image_index = -1;
-			MGVK_RecreateSwapChain(device);
+			device->swapchainAcquireOutOfDate = true;
 			return false;
 		}
 		if (res == VK_ERROR_SURFACE_LOST_KHR)
@@ -2666,6 +2844,14 @@ bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 			printf("vkAcquireNextImageKHR failed with VkResult %d.\n", res);
 			return false;
 		}
+		if (res == VK_SUBOPTIMAL_KHR && device->swapchainTrace)
+		{
+			printf(
+				"MONOGAME_VULKAN_SWAPCHAIN_TRACE usable-suboptimal generation=%llu operation=acquire extent=%ux%u\n",
+				static_cast<unsigned long long>(device->swapchainGeneration),
+				device->swapchainWidth,
+				device->swapchainHeight);
+		}
 	}
 
 	// This should be cleared by now.
@@ -2679,12 +2865,28 @@ void MGVK_PrepareFrame(MGG_GraphicsDevice* device)
 	if (device->swapchain == VK_NULL_HANDLE || device->frames.empty() || device->frameIndex >= device->frames.size())
 		return;
 
-	auto& frame = device->frames[device->frameIndex];
+	if (device->frames[device->frameIndex].is_recording)
+		return;
 
 	// This is only here for the first frame or for after the
 	// swapchain is resized...  normally this occurs on Present.
-	if (!MGVK_TryAcquireSwap(device, frame))
-		return;
+	if (!MGVK_TryAcquireSwap(device, device->frames[device->frameIndex]))
+	{
+		if (!device->swapchainAcquireOutOfDate)
+			return;
+
+		// Recreate once and permit exactly one acquire against the replacement.
+		// If that acquire is also out of date, BeginFrame will retry on a later
+		// engine frame rather than looping in native presentation code.
+		device->swapchainAcquireOutOfDate = false;
+		MGVK_RecreateSwapChain(device, "acquire-out-of-date");
+		if (device->swapchain == VK_NULL_HANDLE || device->frames.empty() ||
+			device->frameIndex >= device->frames.size() ||
+			!MGVK_TryAcquireSwap(device, device->frames[device->frameIndex]))
+			return;
+	}
+
+	auto& frame = device->frames[device->frameIndex];
 
 	// Cleanup resources from the last time this frame was rendered.
 	MGVK_ProcessDescriptorCaches(device, device->frame);
@@ -2702,6 +2904,7 @@ void MGVK_PrepareFrame(MGG_GraphicsDevice* device)
 	}
 
 	MGVK_BeginCommandBuffer(frame.commandBuffer);
+	MGVK_BeginPresentationTiming(device, frame);
 
 	//device->dynamicOffsets[0] = 0;
 	//device->dynamicOffsets[1] = 0;
@@ -2712,13 +2915,20 @@ void MGVK_PrepareFrame(MGG_GraphicsDevice* device)
 mgint MGG_GraphicsDevice_BeginFrame(MGG_GraphicsDevice* device)
 {
 	assert(device != nullptr);
-	if (device->swapchain == VK_NULL_HANDLE &&
+	if (device->swapchainAcquireOutOfDate)
+	{
+		device->swapchainAcquireOutOfDate = false;
+		MGVK_RecreateSwapChain(device, "acquire-out-of-date-retry");
+		if (device->swapchain != VK_NULL_HANDLE)
+			MGVK_PrepareFrame(device);
+	}
+	else if (device->swapchain == VK_NULL_HANDLE &&
 		device->surface != VK_NULL_HANDLE &&
 		device->window != nullptr &&
-		device->swapchainWidth > 0 &&
-		device->swapchainHeight > 0)
+		device->requestedSwapchainWidth > 0 &&
+		device->requestedSwapchainHeight > 0)
 	{
-		MGVK_RecreateSwapChain(device);
+		MGVK_RecreateSwapChain(device, "resume");
 		if (device->swapchain != VK_NULL_HANDLE)
 			MGVK_PrepareFrame(device);
 	}
@@ -3041,14 +3251,21 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		return;
 
 
-	auto frameIndex = currentFrame % device->swapchainCount;
-
 	auto& frame = device->frames[device->frameIndex];
 	if (!frame.is_recording || frame.image_index == uint32_t(-1))
 		return;
 	auto& swap = device->swapchains[frame.image_index];
 
 	MGVK_EndRenderPass(device, frame.commandBuffer);
+	if (frame.timingStarted)
+	{
+		vkCmdWriteTimestamp(
+			frame.commandBuffer,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+			frame.timingQueryPool,
+			1);
+		frame.timingSubmissionId = ++device->gpuPresentationSerial;
+	}
 
 	VkResult res;
 
@@ -3075,8 +3292,11 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		if (res != VK_SUCCESS)
 		{
 			printf("vkQueueSubmit failed with VkResult %d.\n", res);
+			frame.timingStarted = false;
+			frame.timingSubmissionId = 0;
 			return;
 		}
+		frame.timingPending = frame.timingStarted;
 
 		VkPresentInfoKHR presentInfo = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
 		presentInfo.waitSemaphoreCount = 1;
@@ -3094,33 +3314,31 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		MGVK_CleanupPendingTransfers(device);
 	}
 
+	frame.image_index = -1;
+	frame.is_rendering = true;
+
 	if (res == VK_ERROR_SURFACE_LOST_KHR)
 	{
-		frame.image_index = -1;
 		MGG_GraphicsDevice_SuspendPresentation(device);
 		return;
 	}
-	else if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
-	{
-		// This will happen if the window is minimized too.
 
-		if (res == VK_SUBOPTIMAL_KHR)
-			printf("Swapchain suboptimal. Recreating swapchain...\n");
-		else
-			printf("Swapchain out of date. Recreating swapchain...\n");
-			
-		MGVK_RecreateSwapChain(device);
-				
-		if (device->swapchain == VK_NULL_HANDLE)
-			printf("Couldn't recreate swapchain!\n");
+	const bool recreateAfterPresent = res == VK_ERROR_OUT_OF_DATE_KHR;
+	if (res == VK_SUBOPTIMAL_KHR)
+	{
+		if (device->swapchainTrace)
+		{
+			printf(
+				"MONOGAME_VULKAN_SWAPCHAIN_TRACE usable-suboptimal generation=%llu operation=present extent=%ux%u\n",
+				static_cast<unsigned long long>(device->swapchainGeneration),
+				device->swapchainWidth,
+				device->swapchainHeight);
+		}
 	}
-	else
+	else if (!recreateAfterPresent)
 	{
 		VK_CHECK_RESULT(res);
 	}
-
-	frame.image_index = -1;
-	frame.is_rendering = true;
 
 	// Move the pending buffers to the free list 
 	// for reuse on the next frame.
@@ -3152,6 +3370,11 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		device->frameIndex = device->frame % device->swapchainCount;
 	}
 
+	// No references into device->frames may survive this point: recreation can
+	// resize both frame and swapchain arrays when the image count changes.
+	if (recreateAfterPresent)
+		MGVK_RecreateSwapChain(device, "present-out-of-date");
+
 	// Get the next swap frame here so that any blocking waiting for the GPU to
 	// finish occurs during Present.  This must be outside queueMutex because a
 	// recoverable acquire error can recreate the swapchain and wait for the queue.
@@ -3174,6 +3397,7 @@ void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device)
 	auto result = vkBeginCommandBuffer(frame.commandBuffer, &beginInfo);
 	VK_CHECK_RESULT(result);
 	frame.is_recording = true;
+	MGVK_BeginPresentationTiming(device, frame);
 	device->inRenderPass = false;
 	device->renderTargetDirty = true;
 	device->pipelineStateDirty = true;
@@ -6140,7 +6364,10 @@ void MGG_Texture_GetData(MGG_GraphicsDevice* device, MGG_Texture* texture, mgint
 	vmaDestroyBuffer(device->allocator, buffer.buffer, buffer.allocation);
 
 	if (restart_frame)
+	{
 		MGVK_BeginCommandBuffer(frame.commandBuffer);
+		MGVK_BeginPresentationTiming(device, frame);
+	}
 }
 
 MGG_InputLayout* MGG_InputLayout_Create(

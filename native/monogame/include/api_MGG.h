@@ -48,6 +48,7 @@ MG_EXPORT void MGG_GraphicsDevice_ResizeSwapchain(MGG_GraphicsDevice* device, MG
 MG_EXPORT mgint MGG_GraphicsDevice_BeginFrame(MGG_GraphicsDevice* device);
 MG_EXPORT void MGG_GraphicsDevice_Clear(MGG_GraphicsDevice* device, MGClearOptions options, Vector4& color, mgfloat depth, mgint stencil);
 MG_EXPORT void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, mgint syncInterval);
+MG_EXPORT mgbyte MGG_GraphicsDevice_TryDequeueCompletedGpuFrameTiming(MGG_GraphicsDevice* device, MGG_GpuFrameTiming& timing);
 MG_EXPORT void MGG_GraphicsDevice_SetBlendState(MGG_GraphicsDevice* device, MGG_BlendState* state, mgfloat factorR, mgfloat factorG, mgfloat factorB, mgfloat factorA);
 MG_EXPORT void MGG_GraphicsDevice_SetDepthStencilState(MGG_GraphicsDevice* device, MGG_DepthStencilState* state);
 MG_EXPORT void MGG_GraphicsDevice_SetRasterizerState(MGG_GraphicsDevice* device, MGG_RasterizerState* state);

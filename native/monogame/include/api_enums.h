@@ -15,7 +15,6 @@ enum class MGSoundState : mgint
     Paused = 1,
     Stopped = 2,
 };
-
 enum class MGFilterMode : mgint
 {
     LowPass = 0,
@@ -120,6 +119,7 @@ enum class MGNativeGraphicsFeatures : mguint
 {
     None = 0,
     AnisotropicFiltering = 1,
+    CompletedGpuFrameTiming = 2,
 };
 
 enum class MGClearOptions : mgint

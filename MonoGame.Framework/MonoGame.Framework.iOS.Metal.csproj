@@ -48,6 +48,7 @@
     <Compile Include="Platform\Native\GraphicsCapabilities.Native.cs" />
     <Compile Include="Platform\Native\GraphicsDebug.Native.cs" />
     <Compile Include="Platform\Native\GraphicsDevice.Native.cs" />
+    <Compile Include="Platform\Native\GpuFrameTiming.Native.cs" />
     <Compile Include="Platform\Native\IndexBuffer.Native.cs" />
     <Compile Include="Platform\Native\OcclusionQuery.Native.cs" />
     <Compile Include="Platform\Native\RasterizerState.Native.cs" />

@@ -3,6 +3,7 @@
 // file 'LICENSE.txt', which is part of this source code package.
 
 #include "api_MGG.h"
+#include "../common/MG_FrameTiming.h"
 
 #include <Metal/Metal.h>
 #include <QuartzCore/CAMetalLayer.h>
@@ -13,6 +14,7 @@
 #include <dispatch/dispatch.h>
 #include <algorithm>
 #include <climits>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
@@ -324,12 +326,14 @@ struct MGG_GraphicsDevice
     std::vector<MGMetalPipelineCacheEntry> pipelineCache;
     uint64_t nextPipelineResourceId = 1;
     uint64_t frameSerial = 0;
+    uint64_t presentationSerial = 0;
     uint64_t pipelineRequestCount = 0;
     uint64_t pipelineCompileCount = 0;
     uint64_t pipelineCacheHitCount = 0;
     uint64_t pipelineFailureCount = 0;
     bool pipelineTrace = false;
     bool pipelineDirty = true;
+    MGG_CompletedGpuFrameTimingQueue completedGpuFrameTimings;
 };
 
 static MTLPixelFormat MGMetalSurfaceFormat(MGSurfaceFormat format)
@@ -1307,7 +1311,9 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
     value.ShaderProfile = legacy.ShaderProfile;
     value.MaxMultiSampleCount = legacy.MaxMultiSampleCount;
     value.TextureCompression = legacy.TextureCompression;
-    value.Features = MGNativeGraphicsFeatures::AnisotropicFiltering;
+    value.Features = static_cast<MGNativeGraphicsFeatures>(
+        static_cast<mguint>(MGNativeGraphicsFeatures::AnisotropicFiltering) |
+        static_cast<mguint>(MGNativeGraphicsFeatures::CompletedGpuFrameTiming));
     value.MaxAnisotropy = 16.0f;
     value.MaxRenderTargets = static_cast<mgint>(MGMetalMaxColorTargets);
     value.MaxDrawBuffers = static_cast<mgint>(MGMetalMaxColorTargets);
@@ -1426,14 +1432,37 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
     if (device->drawable != nil)
         [device->commandBuffer presentDrawable:device->drawable];
     dispatch_semaphore_t semaphore = device->inFlight;
+    const uint64_t submissionId = ++device->presentationSerial;
     [device->commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> completedBuffer) {
         MGMetalReportCommandBufferError(completedBuffer);
+        if (completedBuffer.status == MTLCommandBufferStatusCompleted)
+        {
+            const CFTimeInterval start = completedBuffer.GPUStartTime;
+            const CFTimeInterval end = completedBuffer.GPUEndTime;
+            const double durationNanoseconds = (end - start) * 1'000'000'000.0;
+            if (start > 0.0 && end >= start && std::isfinite(durationNanoseconds) &&
+                durationNanoseconds > 0.0 && durationNanoseconds <= static_cast<double>(UINT64_MAX))
+            {
+                device->completedGpuFrameTimings.Push(
+                    submissionId,
+                    static_cast<uint64_t>(std::llround(durationNanoseconds)));
+            }
+        }
         dispatch_semaphore_signal(semaphore);
     }];
     [device->commandBuffer commit];
     device->lastSubmitted = device->commandBuffer;
     device->commandBuffer = nil;
     device->drawable = nil;
+}
+
+mgbyte MGG_GraphicsDevice_TryDequeueCompletedGpuFrameTiming(
+    MGG_GraphicsDevice* device,
+    MGG_GpuFrameTiming& timing)
+{
+    if (device == nullptr)
+        return false;
+    return device->completedGpuFrameTimings.TryPop(timing);
 }
 
 void MGG_GraphicsDevice_SubmitWithoutPresent(MGG_GraphicsDevice* device)

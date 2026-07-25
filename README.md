@@ -51,6 +51,13 @@ We support a growing list of platforms across the desktop, mobile, and console s
 > does not replace the existing OpenGL implementation. See
 > [the native OpenGL guide](docs/native-opengl.md).
 
+> [!NOTE]
+> The native Metal and Vulkan previews expose optional completed-presentation
+> GPU timings through `GraphicsDevice`. The capability bit must be checked
+> before dequeueing, so a framework built from this fork remains compatible
+> with older native libraries. See the [Metal](README-METAL.md) and
+> [Android Vulkan](docs/android-vulkan.md) guides.
+
 [^1]: An experimental Vulkan implementation is available to source code users.
 
 [^2]: An experimental DirectX 12 implementation is available to source code users.

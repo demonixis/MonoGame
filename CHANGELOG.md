@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Native Metal and Vulkan now expose non-blocking completed-presentation GPU timing through `GraphicsDevice.SupportsCompletedGpuFrameTiming`, `TryDequeueCompletedGpuFrameTiming`, and `GpuFrameTiming`. Results use a bounded 64-entry native queue and report cumulative losses.
 - Added an opt-in native OpenGL/OpenGL ES backend, explicit Android, iOS and
   desktop packages, versioned capability and render-target ABI entry points,
   dedicated MGFX profiles, and deterministic four-target MRT validation.
@@ -11,6 +12,8 @@
 
 ### Fixed
 
+- Native Vulkan swapchains now honor an authoritative surface `currentExtent`, keep requested and realized extents separate, retain usable `VK_SUBOPTIMAL_KHR` images, and bound acquire/recreation retries without moving the SDL window.
+- Native desktop window resize events now reset the native swapchain before raising `ClientSizeChanged`, keeping the presentation parameters, viewport, scissor and Metal/Vulkan/OpenGL drawable at the user-resized SDL window dimensions.
 - Native Metal now caches render pipeline variants across render-target switches, avoids redundant pipeline-state invalidation, and bounds retries after a transient compiler-service failure to once per variant per frame.
 - Mobile OpenGL builds no longer select the SDL-only OpenXR interop branch, Android logging binds the platform namespace explicitly, and platform-specific intermediate paths cannot leak generated `obj`/`bin` sources into sibling heads.
 - Native OpenGL effects now reflect stage-qualified GLSL block names, track `mgfx-spvc` as an incremental MGCB dependency, and preserve single-face `RenderTargetCube` bindings used by reflection probes instead of producing stale black or corrupt frames.

@@ -109,6 +109,14 @@ starting at 11. Reflection-driven direct resources and descriptor tables are
 both supported. Small per-frame shared binding arenas keep indirect resource
 data alive until submitted GPU work completes.
 
+The managed native framework also exposes completed-presentation GPU timing.
+Call `GraphicsDevice.SupportsCompletedGpuFrameTiming` first, then drain
+`TryDequeueCompletedGpuFrameTiming` without blocking. Metal publishes one
+monotonic submission identifier and the successful command buffer's
+`GPUStartTime`/`GPUEndTime` duration from its completion handler. The fixed
+64-result queue drops the oldest entry on saturation and reports the cumulative
+loss count. A build or timing marker is not physical-device or visual evidence.
+
 MSAA support and BC/S3TC compression are queried from the selected `MTLDevice`;
 ETC2 and ASTC are exposed only for Apple GPU families. macOS display modes come
 from CoreGraphics and iOS physical display dimensions come from the UIKit host,
@@ -117,6 +125,11 @@ keeping UIKit out of the shared Objective-C++ renderer.
 The backend is now a functioning shader-rendering preview. The following gates
 remain before treating the packages as production-qualified:
 
+User-driven macOS SDL resize events now reset the native swapchain before
+`ClientSizeChanged`, so the `CAMetalLayer`, presentation parameters, viewport
+and scissor follow the resized window instead of retaining the initial
+backbuffer in the top-left corner.
+
 - Provision the separately downloaded official converter on the Apple CI
   runner. CI now calls `build-stock-effects.sh` before either native runtime is
   built and fails instead of publishing a package without the six effects.
@@ -124,9 +137,9 @@ remain before treating the packages as production-qualified:
   API validation. `SpriteEffect`, CBV/SRV/sampler binding, indexed rendering,
   MSAA resolve, and readback are covered by the automated macOS smoke.
 - Run the shader smoke on a physical iOS arm64 device with a signed build.
-- Complete lifecycle qualification: resize/fullscreen on macOS, and an iOS
-  device run covering AOT/trimming, rotation, background/foreground, memory
-  pressure, and drawable loss/recovery.
+- Complete lifecycle qualification: continuous-resize, fullscreen and
+  multi-display soak on macOS, and an iOS device run covering AOT/trimming,
+  rotation, background/foreground, memory pressure, and drawable loss/recovery.
 
 Apple's converter is a separately downloaded developer tool and is not
 redistributed by this repository. A missing converter produces an actionable

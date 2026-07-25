@@ -119,6 +119,25 @@ and backgrounding suspend presentation, wait for submitted work, destroy the
 swapchain/surface, release the old `ANativeWindow`, and attach the replacement.
 Frames remain safely idle while no surface is available.
 
+Swapchain creation treats `VkSurfaceCapabilitiesKHR.currentExtent` as
+authoritative unless it is the Vulkan variable-extent sentinel. Only then is
+the requested drawable size clamped to the advertised minimum and maximum.
+`VK_SUBOPTIMAL_KHR` remains presentable; explicit configuration changes and
+`VK_ERROR_OUT_OF_DATE_KHR` trigger reconstruction. Set
+`MONOGAME_VULKAN_SWAPCHAIN_TRACE=1` before launch to log the reconstruction
+reason, generation, requested size and realized extent.
+
+When the selected graphics queue exposes valid timestamp bits,
+`GraphicsDevice.SupportsCompletedGpuFrameTiming` is true and
+`TryDequeueCompletedGpuFrameTiming(out GpuFrameTiming)` returns completed
+presentation submissions without waiting. Vulkan writes two timestamps around
+the submitted presentation command stream and reads them only after its fence
+signals. CPU waits, queue presentation, auxiliary transfers and
+`SubmitWithoutPresent` are excluded. The fixed native queue holds 64 results;
+its cumulative loss counter must remain unchanged during a qualification run.
+Older native libraries and other backends leave the capability disabled, so
+the managed method returns before resolving the new native symbol.
+
 Capture startup and lifecycle diagnostics with:
 
 ```sh

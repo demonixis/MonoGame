@@ -183,6 +183,16 @@ internal class NativeGameWindow : GameWindow
         _width = width;
         _height = height;
 
+        var graphicsDevice = _platform.Game.GraphicsDevice;
+        if (graphicsDevice != null &&
+            (graphicsDevice.PresentationParameters.BackBufferWidth != width ||
+             graphicsDevice.PresentationParameters.BackBufferHeight != height))
+        {
+            graphicsDevice.PresentationParameters.BackBufferWidth = width;
+            graphicsDevice.PresentationParameters.BackBufferHeight = height;
+            graphicsDevice.Reset();
+        }
+
         MGP.Window_SetClientSize(_handle, width, height);
 
         OnClientSizeChanged();
