@@ -10,7 +10,7 @@
     <PackageId>MonoGame.Framework.iOS</PackageId>
     <AppendTargetFrameworkToOutputPath>False</AppendTargetFrameworkToOutputPath>
     <SupportedOSPlatformVersion>11.2</SupportedOSPlatformVersion>
-    <TargetPlatformVersion>26.2</TargetPlatformVersion>
+    <TargetPlatformVersion>26.5</TargetPlatformVersion>
     <IsAotCompatible>true</IsAotCompatible>
     <PackageReadmeFile>README-packages.md</PackageReadmeFile>
     <CheckEolWorkloads>false</CheckEolWorkloads>

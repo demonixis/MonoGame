@@ -12,7 +12,7 @@ pause/resume host remain shared with the GLES package.
 - An `arm64-v8a` device exposing Vulkan 1.1.
 - `VK_KHR_swapchain`, a queue that supports both graphics and presentation,
   and scalar block layout support.
-- .NET 10 SDK 10.0.300 with workload set 10.0.300 and the Android workload.
+- .NET 10 SDK 10.0.302 with workload set 10.0.302 and the Android workload.
 
 The package manifest declares API 29 and Vulkan 1.1 as required features, so
 Android stores can filter incompatible devices. The first preview contains no

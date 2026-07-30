@@ -25,7 +25,7 @@ Desktop development is possible from any operating system supporting the above m
 MonoGame requires the dotnet workloads for **iOS** or **Android** depending on the target.
 
 The Native Android Vulkan and Apple Metal preview projects specifically require
-.NET SDK and workload set `10.0.300`; the Android Vulkan native build also pins
+.NET SDK and workload set `10.0.302`; the Android Vulkan native build also pins
 Android NDK `28.2.13676358`. This does not retarget the historical Android GLES
 package or the general repository build.
 

@@ -43,7 +43,7 @@ The visionOS phase is now started. The repository contains a .NET 10 contract
 solution, an allocation-free spatial-input API, an ARKit native bridge, and a
 typechecked fully immersive Swift host. There is still no visionOS TFM,
 MonoGame package, linked immersive presenter, render loop, or content
-identifier because workload set 10.0.300 does not provide a visionOS workload.
+identifier because workload set 10.0.302 does not provide a visionOS workload.
 See [`docs/visionos-fully-immersive.md`](docs/visionos-fully-immersive.md) for
 the implemented surface and the remaining gates.
 
@@ -148,9 +148,9 @@ to commit.
 
 The Apple lane must be built on macOS with the following versions and tools:
 
-- Xcode 26.3;
-- exact .NET SDK `10.0.300`;
-- exact workload set `10.0.300`;
+- Xcode 26.6 with the Apple 26.5 SDKs;
+- exact .NET SDK `10.0.302`;
+- exact workload set `10.0.302`;
 - .NET `macos` and `ios` workloads;
 - [Apple Metal Shader Converter 4.0](https://developer.apple.com/metal/shader-converter/)
   available on `PATH`;
@@ -166,7 +166,7 @@ The dedicated SDK configuration is stored in
 `scripts/apple-metal/global.json`. Do not add a root `global.json` solely for
 this preview.
 
-The managed projects use `TargetPlatformVersion` 26.2. The SDK, workload set,
+The managed projects use `TargetPlatformVersion` 26.5. The SDK, workload set,
 Xcode version, and platform version are a validated set and must not be
 upgraded independently.
 
@@ -183,12 +183,12 @@ cmake --version
 metal-shaderconverter --version
 ```
 
-`dotnet --version` must print exactly `10.0.300`. Install the workloads using
+`dotnet --version` must print exactly `10.0.302`. Install the workloads using
 the same feature band:
 
 ```sh
 cd scripts/apple-metal
-dotnet workload install macos ios --version 10.0.300
+dotnet workload install macos ios --version 10.0.302
 ```
 
 ## Initialize the checkout
@@ -390,7 +390,7 @@ later, and select either `osx-arm64` or `osx-x64` as its RID.
 
 The `global.json` under `scripts/apple-metal` does not automatically apply to
 an application located elsewhere. That application must also resolve the
-exact 10.0.300 SDK through its environment or an equivalent local pin.
+exact 10.0.302 SDK through its environment or an equivalent local pin.
 
 An iOS source application references
 `MonoGame.Framework.iOS.Metal.csproj` and the XCFramework slice matching
@@ -548,7 +548,7 @@ MonoGame immersive application.
 
 - Fully immersive rendering is the first selected mode; window and volume
   rendering remain outside this phase.
-- Keep the .NET 10.0.300 pin, but defer the TFM and RIDs until an official
+- Keep the .NET 10.0.302 pin, but defer the TFM and RIDs until an official
   visionOS workload exposes them.
 - The SwiftUI/Compositor Services host source exists without SDL2.
 - The public `VisionOSInput` contract covers head tracking, per-eye matrices,
@@ -607,7 +607,7 @@ pass.
 
 ## Troubleshooting
 
-### The 10.0.300 SDK is not found
+### The 10.0.302 SDK is not found
 
 Run repository commands from `scripts/apple-metal`, where the dedicated
 `global.json` is resolved, and verify:
@@ -617,7 +617,7 @@ dotnet --list-sdks
 dotnet --version
 ```
 
-Roll-forward is disabled: `10.0.301` does not replace `10.0.300`.
+Roll-forward is disabled: `10.0.303` does not replace `10.0.302`.
 
 ### Metal Shader Converter is not found
 

@@ -159,18 +159,19 @@ Upstream doesn't allow LLM-generated contributions BUT this fork is private and 
 
 - The C3DE-consumed Android GLES and iOS OpenGL framework heads target
   `net10.0-android` and `net10.0-ios`. Android fixes API 36 as its target and API
-  23 as its floor; iOS fixes SDK 26.2 as its target while retaining its existing
+  23 as its floor; iOS fixes SDK 26.5 as its target while retaining its existing
   supported-OS floor. Validate these source-reference lanes with SDK/workload set
-  10.0.300; this does not retarget unrelated packages or general upstream CI.
+  10.0.302; this does not retarget unrelated packages or general upstream CI.
 - Mobile OpenGL heads must never compile the SDL-only OpenXR interop branch.
   `OpenXrGraphicsInterop.Platform.cs` uses that branch only under `DESKTOPGL`,
   and Android logging references `global::Android.Util` so the platform namespace
   cannot bind to the framework assembly name. Keep explicit generated `obj`/`bin`
   source exclusions when project-specific intermediate paths are active.
 - The native Android Vulkan and Apple Metal preview projects use dedicated .NET
-  SDK 10.0.300 lanes with roll-forward disabled and workload set 10.0.300.
+  SDK 10.0.302 lanes with roll-forward disabled and workload set 10.0.302.
   Android Vulkan additionally pins NDK 28.2.13676358; Apple Metal pins Xcode
-  26.3. Update each lane's SDK, workload and native toolchain together.
+  26.6 with Apple SDK and target platform version 26.5. Update each lane's SDK,
+  workload and native toolchain together.
 - Do not add a root `global.json` merely for a preview backend. Keep SDK pinning
   local to the dedicated build lane or helper entrypoint.
 

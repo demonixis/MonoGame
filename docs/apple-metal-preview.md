@@ -9,7 +9,7 @@ separate from the existing Vulkan, DirectX, and OpenGL backends.
 - iOS and iPadOS 18 or later through UIKit and a native `CAMetalLayer`.
 - macOS universal runtime (`arm64` and `x86_64`).
 - iOS device `arm64` plus simulator `arm64` and `x86_64` in an XCFramework.
-- A dedicated .NET SDK 10.0.300 lane under `scripts/apple-metal`.
+- A dedicated .NET SDK 10.0.302 lane under `scripts/apple-metal`.
 - HLSL shader input compiled to DXIL and converted with Apple's Metal Shader
   Converter. Vulkan, MoltenVK, and SPIR-V are not part of this lane.
 
@@ -18,17 +18,17 @@ solution, public head/hand/interaction APIs, an ARKit bridge that builds device
 and simulator slices, and a typechecked SwiftUI fully immersive host. The
 Compositor Services presenter, render loop, managed visionOS runtime/package,
 shader payload, and simulator/device smoke tests are not implemented yet.
-Workload set 10.0.300 currently exposes no visionOS workload, so the repository
+Workload set 10.0.302 currently exposes no visionOS workload, so the repository
 does not invent a `net10.0-visionos` TFM. The detailed contract and commands are
 in [`visionos-fully-immersive.md`](visionos-fully-immersive.md).
 
 ## Build
 
-Install Xcode 26.3, .NET SDK 10.0.300 with workload set 10.0.300 for `macos`
+Install Xcode 26.6, .NET SDK 10.0.302 with workload set 10.0.302 for `macos`
 and `ios`, Premake 5, and Apple's Metal Shader Converter. This keeps the Apple
 lane on the exact .NET feature band selected for this fork. The Apple projects
-target platform version 26.2, matching the 26.2.10233 packs carried by workload
-set 10.0.300 and Xcode 26.3.
+target platform version 26.5, matching the Apple 26.5 packs carried by workload
+set 10.0.302 and Xcode 26.6.
 
 From `native/monogame`, generate and build only the Metal desktop runtime:
 
@@ -45,7 +45,7 @@ native/monogame/metal/build-ios-xcframework.sh Release
 ```
 
 Run managed builds from `scripts/apple-metal` so its `global.json` pins SDK
-10.0.300 and workload set 10.0.300. The helper scripts change to that
+10.0.302 and workload set 10.0.302. The helper scripts change to that
 directory themselves, so they can also be invoked safely from the repository
 root:
 

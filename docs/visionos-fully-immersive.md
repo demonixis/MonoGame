@@ -17,7 +17,7 @@ change the existing macOS, iOS, OpenGL, or Vulkan packages.
 | Native input XCFramework | Builds for xros arm64 and xrsimulator arm64/x64 |
 | SwiftUI fully immersive host source | Typechecks against the xros SDK |
 | Compositor Services Metal presenter/render loop | Not implemented |
-| Managed visionOS TFM, runtime, and package | Blocked: .NET workload set 10.0.300 exposes no visionOS workload |
+| Managed visionOS TFM, runtime, and package | Blocked: .NET workload set 10.0.302 exposes no visionOS workload |
 | visionOS Metal shader payload/content ID | Not defined; do not reuse macOS or iOS IDs |
 | Linked simulator or device application | Not available; no visual or hardware qualification has occurred |
 

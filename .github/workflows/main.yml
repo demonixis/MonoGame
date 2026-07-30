@@ -8,7 +8,7 @@ concurrency:
 
 env:
   DotnetVersion: 9.0.314
-  XCodeVersion: 26.3
+  XCodeVersion: 26.6
   
 jobs:
   build:
@@ -207,7 +207,7 @@ jobs:
     name: android-vulkan-preview
     runs-on: ubuntu-24.04
     env:
-      AndroidVulkanDotnetVersion: 10.0.300
+      AndroidVulkanDotnetVersion: 10.0.302
       AndroidVulkanNdkVersion: 28.2.13676358
       AndroidVulkanPackageVersion: 0.0.0-smoke
     defaults:
@@ -294,7 +294,7 @@ jobs:
     name: android-native-opengles-preview
     runs-on: ubuntu-24.04
     env:
-      NativeOpenGLDotnetVersion: 10.0.300
+      NativeOpenGLDotnetVersion: 10.0.302
       NativeOpenGLNdkVersion: 28.2.13676358
       NativeOpenGLPackageVersion: 0.0.0-smoke
     defaults:
@@ -379,9 +379,9 @@ jobs:
     name: apple-native-opengl-preview
     runs-on: macos-26
     env:
-      NativeOpenGLDotnetVersion: 10.0.300
-      NativeOpenGLWorkloadVersion: 10.0.300
-      NativeOpenGLXCodeVersion: 26.3
+      NativeOpenGLDotnetVersion: 10.0.302
+      NativeOpenGLWorkloadVersion: 10.0.302
+      NativeOpenGLXCodeVersion: 26.6
       NativeOpenGLPackageVersion: 0.0.0-smoke
     defaults:
       run:
@@ -489,9 +489,9 @@ jobs:
     name: apple-metal-preview
     runs-on: macos-26
     env:
-      AppleDotnetVersion: 10.0.300
-      AppleWorkloadVersion: 10.0.300
-      AppleXCodeVersion: 26.3
+      AppleDotnetVersion: 10.0.302
+      AppleWorkloadVersion: 10.0.302
+      AppleXCodeVersion: 26.6
     defaults:
       run:
         shell: bash
