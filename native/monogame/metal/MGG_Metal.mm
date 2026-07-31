@@ -1990,15 +1990,31 @@ void MGG_Buffer_SetData(MGG_GraphicsDevice* device, MGG_Buffer*& buffer, mgint o
 void MGG_Buffer_GetData(MGG_GraphicsDevice* device, MGG_Buffer* buffer, mgint offset, mgbyte* data, mgint dataCount, mgint dataBytes, mgint dataStride)
 {
     (void)device;
-    if (buffer == nullptr || data == nullptr || offset < 0 || dataBytes < 0 || offset + dataBytes > buffer->size)
+    if (buffer == nullptr || data == nullptr || offset < 0 ||
+        dataCount <= 0 || dataBytes <= 0 || dataStride <= 0)
         return;
-    if (dataStride <= 0 || dataCount <= 1)
-        memcpy(data, (mgbyte*)buffer->buffer.contents + offset, dataBytes);
+
+    const size_t elementBytes = std::min(
+        static_cast<size_t>(dataBytes),
+        static_cast<size_t>(dataStride));
+    const size_t sourceSpan =
+        static_cast<size_t>(dataCount - 1) * static_cast<size_t>(dataStride) +
+        elementBytes;
+    if (static_cast<size_t>(offset) + sourceSpan > static_cast<size_t>(buffer->size))
+        return;
+
+    auto* source = static_cast<mgbyte*>(buffer->buffer.contents) + offset;
+    if (dataStride == dataBytes)
+        memcpy(data, source, static_cast<size_t>(dataCount) * elementBytes);
     else
     {
-        const int elementSize = dataBytes / dataCount;
         for (int i = 0; i < dataCount; ++i)
-            memcpy(data + i * dataStride, (mgbyte*)buffer->buffer.contents + offset + i * elementSize, elementSize);
+        {
+            memcpy(
+                data + static_cast<size_t>(i) * static_cast<size_t>(dataBytes),
+                source + static_cast<size_t>(i) * static_cast<size_t>(dataStride),
+                elementBytes);
+        }
     }
 }
 
