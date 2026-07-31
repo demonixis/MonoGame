@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
@@ -135,6 +136,10 @@ namespace Microsoft.Xna.Framework.Content
             return null;
         }
 
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2057",
+            Justification = "Built-in readers are registered with explicit factories above. The reflective fallback is retained only for third-party readers, which must register their own factory for NativeAOT.")]
         internal ContentTypeReader[] LoadAssetReaders(ContentReader reader)
         {
             // The first content byte i read tells me the number of content readers in this XNB file
@@ -154,20 +159,17 @@ namespace Microsoft.Xna.Framework.Content
                 {
                     // This string tells us what reader we need to decode the following data
                     string originalReaderTypeString = reader.ReadString();
+                    string readerTypeString = PrepareType(originalReaderTypeString);
 
                     Func<ContentTypeReader> readerFunc;
-                    if (typeCreators.TryGetValue(originalReaderTypeString, out readerFunc))
+                    if (typeCreators.TryGetValue(originalReaderTypeString, out readerFunc) ||
+                        typeCreators.TryGetValue(readerTypeString, out readerFunc))
                     {
                         contentReaders[i] = readerFunc();
                         needsInitialize[i] = true;
                     }
                     else
                     {
-                        // Need to resolve namespace differences
-                        string readerTypeString = originalReaderTypeString;
-
-                        readerTypeString = PrepareType(readerTypeString);
-
                         Type l_readerType = null;
                         try
                         {
@@ -293,6 +295,10 @@ namespace Microsoft.Xna.Framework.Content
         {
             if (!typeCreators.ContainsKey(typeString))
                 typeCreators.Add(typeString, createFunction);
+
+            string preparedTypeString = PrepareType(typeString);
+            if (!typeCreators.ContainsKey(preparedTypeString))
+                typeCreators.Add(preparedTypeString, createFunction);
         }
 
         /// <summary>
