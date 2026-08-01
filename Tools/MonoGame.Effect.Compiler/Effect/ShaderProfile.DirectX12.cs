@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -56,7 +57,8 @@ namespace MonoGame.Effect
             }
         }
 
-        private static readonly Regex CBufferParam = new Regex(@";[\W]+(?:column_major)?(?:row_major)?[\W]+(?<ParamType>[^\r\n\t\f\v} ]+)[\W]+(?<ParamName>[\S]+);[\W]+; Offset:[\W]+(?<ParamOffset>[\d]*)", RegexOptions.Compiled);
+        // Long names consume DXC's alignment padding and leave adjacent declaration and metadata separators (`;;`).
+        private static readonly Regex CBufferParam = new Regex(@";\s+(?:(?:column_major|row_major)\s+)?(?<ParamType>[^\s}]+)\s+(?<ParamName>[^\s;]+);\s*;\s*Offset:\s*(?<ParamOffset>\d+)", RegexOptions.Compiled);
         private static readonly Regex CBufferStruct = new Regex(@";[\W]+(?<CBufferName>[^\r\n\t\f\v} ]+);[\W]+; Offset:[\W]+(?<ParamOffset>[\d]*) Size:[\W]+(?<Size>[\d]*)", RegexOptions.Compiled);
         private static readonly Regex ResourceSampler = new Regex(@";[\W]+(?<ResName>[\S]+)[\W]+sampler[\W]+(?<ResFormat>[\S]+)[\W]+(?<ResDim>[\S]+)[\W]+[\S]+[\W]+s(?<ResBind>[\d]*)[\W]+(?<ResCount>[\d]*)", RegexOptions.Compiled);
         private static readonly Regex ResourceTexture = new Regex(@";[\W]+(?<ResName>[\S]+)[\W]+texture[\W]+(?<ResFormat>[\S]+)[\W]+(?<ResDim>[\S]+)[\W]+[\S]+[\W]+t(?<ResBind>[\d]*)[\W]+(?<ResCount>[\d]*)", RegexOptions.Compiled);
@@ -265,13 +267,13 @@ namespace MonoGame.Effect
                         continue;
                     }
 
-                    var match = CBufferParam.Match(line);
-                    if (match.Success)
+                    if (TryParseConstantBufferParameter(
+                        line,
+                        out var paramType,
+                        out var paramName,
+                        out var paramOffset))
                     {
-                        var paramType = match.Groups[1].Value;
-                        var paramName = match.Groups[2].Value;
-                        var paramOffset = match.Groups[3].Value;
-                        current.AddParameter(paramName, paramType, int.Parse(paramOffset));
+                        current.AddParameter(paramName, paramType, paramOffset);
                         continue;
                     }
                 }
@@ -445,6 +447,27 @@ namespace MonoGame.Effect
 
             effect.Shaders.Add(shaderData);
             return shaderData;
+        }
+
+        internal static bool TryParseConstantBufferParameter(
+            string line,
+            out string paramType,
+            out string paramName,
+            out int paramOffset)
+        {
+            var match = CBufferParam.Match(line);
+            if (!match.Success)
+            {
+                paramType = string.Empty;
+                paramName = string.Empty;
+                paramOffset = 0;
+                return false;
+            }
+
+            paramType = match.Groups["ParamType"].Value;
+            paramName = match.Groups["ParamName"].Value;
+            paramOffset = int.Parse(match.Groups["ParamOffset"].Value, CultureInfo.InvariantCulture);
+            return true;
         }
     }
 }
