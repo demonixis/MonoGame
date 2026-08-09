@@ -1124,7 +1124,22 @@ namespace Microsoft.Xna.Framework.Graphics
         /// <inheritdoc cref="SetValue(bool)"/>
 		public void SetValue (Vector3[] value)
 		{
-            for (var i = 0; i < value.Length; i++)
+			SetValue(value, value?.Length ?? throw new ArgumentNullException(nameof(value)));
+		}
+
+        /// <summary>
+        /// Sets the first <paramref name="elementCount"/> entries of a vector array parameter.
+        /// </summary>
+        public void SetValue (Vector3[] value, int elementCount)
+		{
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            if (elementCount < 0 || elementCount > value.Length ||
+                Elements == null || elementCount > Elements.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(elementCount));
+            }
+            for (var i = 0; i < elementCount; i++)
 				Elements[i].SetValue (value[i]);
             StateKey = unchecked(NextStateKey++);
 		}
@@ -1146,7 +1161,22 @@ namespace Microsoft.Xna.Framework.Graphics
         /// <inheritdoc cref="SetValue(bool)"/>
 		public void SetValue (Vector4[] value)
 		{
-            for (var i = 0; i < value.Length; i++)
+			SetValue(value, value?.Length ?? throw new ArgumentNullException(nameof(value)));
+		}
+
+        /// <summary>
+        /// Sets the first <paramref name="elementCount"/> entries of a vector array parameter.
+        /// </summary>
+        public void SetValue (Vector4[] value, int elementCount)
+		{
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            if (elementCount < 0 || elementCount > value.Length ||
+                Elements == null || elementCount > Elements.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(elementCount));
+            }
+            for (var i = 0; i < elementCount; i++)
 				Elements[i].SetValue (value[i]);
             StateKey = unchecked(NextStateKey++);
 		}
