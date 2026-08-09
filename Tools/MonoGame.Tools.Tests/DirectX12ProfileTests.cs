@@ -11,24 +11,24 @@ namespace MonoGame.Tests.ContentPipeline
     public sealed class DirectX12ProfileTests
     {
         [TestCase(
-            ";       float ScreenSpaceGlobalIlluminationEnabled;; Offset:    0",
+            ";       float LightingEnabled;; Offset:    0",
             "float",
-            "ScreenSpaceGlobalIlluminationEnabled",
+            "LightingEnabled",
             0)]
         [TestCase(
-            ";       float4 ScreenSpaceGlobalIlluminationData;; Offset:   16",
+            ";       float4 SurfaceData;; Offset:   16",
             "float4",
-            "ScreenSpaceGlobalIlluminationData",
+            "SurfaceData",
             16)]
         [TestCase(
-            ";       column_major float4x4 ScreenSpaceGlobalIlluminationPreviousView;; Offset:   32",
+            ";       column_major float4x4 PreviousView;; Offset:   32",
             "float4x4",
-            "ScreenSpaceGlobalIlluminationPreviousView",
+            "PreviousView",
             32)]
         [TestCase(
-            ";       row_major float4x4 ScreenSpaceGlobalIlluminationPreviousProjection; ; Offset:   96",
+            ";       row_major float4x4 PreviousProjection; ; Offset:   96",
             "float4x4",
-            "ScreenSpaceGlobalIlluminationPreviousProjection",
+            "PreviousProjection",
             96)]
         public void ConstantBufferParametersAllowAdjacentMetadataSeparator(
             string line,

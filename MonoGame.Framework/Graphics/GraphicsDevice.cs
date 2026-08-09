@@ -230,6 +230,10 @@ namespace Microsoft.Xna.Framework.Graphics
         {
             get
             {
+#if NATIVE
+                if (_explicitRenderPassActive)
+                    return _explicitDepthFormat;
+#endif
                 return IsRenderTargetBound
                     ? _currentRenderTargetBindings[0].DepthFormat
                     : PresentationParameters.DepthStencilFormat;
@@ -975,7 +979,11 @@ namespace Microsoft.Xna.Framework.Graphics
             // Try to early out if the current and new bindings are equal.
             if (_currentRenderTargetCount == renderTargetCount)
             {
+#if NATIVE
+                var isEqual = !_explicitRenderPassActive;
+#else
                 var isEqual = true;
+#endif
                 for (var i = 0; i < _currentRenderTargetCount; i++)
                 {
                     if (_currentRenderTargetBindings[i].RenderTarget != renderTargets[i].RenderTarget ||

@@ -169,10 +169,18 @@ constexpr size_t MGVK_NUM_TARGETS = 4;
 
 struct MGVK_TargetSet
 {
-    MGG_Texture* targets[MGVK_NUM_TARGETS] = { 0 };
+	MGG_Texture* targets[MGVK_NUM_TARGETS] = { 0 };
 	bool firstUse[MGVK_NUM_TARGETS] = { false };
 	int numTargets = 0;
 	std::optional<int> arraySlices[MGVK_NUM_TARGETS];
+	bool explicitRenderPass = false;
+	MGRenderPassLoadAction colorLoadActions[MGVK_NUM_TARGETS] = {};
+	MGRenderPassStoreAction colorStoreActions[MGVK_NUM_TARGETS] = {};
+	MGG_Texture* depthTarget = nullptr;
+	MGRenderPassLoadAction depthLoadAction = MGRenderPassLoadAction::Load;
+	MGRenderPassStoreAction depthStoreAction = MGRenderPassStoreAction::Store;
+	MGRenderPassLoadAction stencilLoadAction = MGRenderPassLoadAction::Load;
+	MGRenderPassStoreAction stencilStoreAction = MGRenderPassStoreAction::Store;
 };
 
 struct MGVK_TargetSetCache
@@ -377,6 +385,9 @@ struct MGG_GraphicsDevice
 
 	MGVK_TargetSet targets;
 	std::map<uint32_t, MGVK_TargetSetCache*> targetCache;
+	Vector4 explicitClearColors[MGVK_NUM_TARGETS] = {};
+	mgfloat explicitClearDepth = 1.0f;
+	mgint explicitClearStencil = 0;
 
 
 	//
@@ -447,6 +458,7 @@ struct MGG_Texture
 
 	MGDepthFormat depthFormat = MGDepthFormat::None;
 	MGG_Texture* depthTexture = nullptr;
+	bool independentDepthStencil = false;
 };
 
 struct MGG_InputLayout
@@ -600,6 +612,33 @@ static VkSampleCountFlagBits ToVkSampleCount(mgint multiSampleCount)
     }
 }
 
+static VkAttachmentLoadOp ToVkAttachmentLoadOp(MGRenderPassLoadAction action)
+{
+	switch (action)
+	{
+	case MGRenderPassLoadAction::Load: return VK_ATTACHMENT_LOAD_OP_LOAD;
+	case MGRenderPassLoadAction::Clear: return VK_ATTACHMENT_LOAD_OP_CLEAR;
+	default: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	}
+}
+
+static VkAttachmentStoreOp ToVkAttachmentStoreOp(MGRenderPassStoreAction action)
+{
+	return action == MGRenderPassStoreAction::Store
+		? VK_ATTACHMENT_STORE_OP_STORE
+		: VK_ATTACHMENT_STORE_OP_DONT_CARE;
+}
+
+static bool MGVKValidRenderPassActions(
+	MGRenderPassLoadAction loadAction,
+	MGRenderPassStoreAction storeAction)
+{
+	return loadAction >= MGRenderPassLoadAction::Load &&
+		loadAction <= MGRenderPassLoadAction::DontCare &&
+		storeAction >= MGRenderPassStoreAction::Store &&
+		storeAction <= MGRenderPassStoreAction::DontCare;
+}
+
 static VkFormat ToVkFormat(MGSurfaceFormat format)
 {
 	switch (format)
@@ -712,6 +751,13 @@ static VkFormat MGVK_SelectDepthFormat(MGG_GraphicsDevice* device, MGDepthFormat
 			: VK_FORMAT_UNDEFINED;
 	}
 
+	if (requested == MGDepthFormat::Depth32Float)
+	{
+		return MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_D32_SFLOAT, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+			? VK_FORMAT_D32_SFLOAT
+			: VK_FORMAT_UNDEFINED;
+	}
+
 	if (requested == MGDepthFormat::Depth24Stencil8)
 	{
 		const VkFormat candidates[] = { VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT };
@@ -730,6 +776,41 @@ static VkFormat MGVK_SelectDepthFormat(MGG_GraphicsDevice* device, MGDepthFormat
 			return candidate;
 	}
 	return VK_FORMAT_UNDEFINED;
+}
+
+static VkFormat MGVK_SelectSampleableDepthFormat(MGG_GraphicsDevice* device, MGDepthFormat requested)
+{
+	const VkFormatFeatureFlags required =
+		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
+		VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+
+	switch (requested)
+	{
+	case MGDepthFormat::Depth16:
+		return MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_D16_UNORM, required)
+			? VK_FORMAT_D16_UNORM
+			: VK_FORMAT_UNDEFINED;
+	case MGDepthFormat::Depth24:
+		return MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_X8_D24_UNORM_PACK32, required)
+			? VK_FORMAT_X8_D24_UNORM_PACK32
+			: VK_FORMAT_UNDEFINED;
+	case MGDepthFormat::Depth24Stencil8:
+	{
+		const VkFormat candidates[] = { VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT };
+		for (auto candidate : candidates)
+		{
+			if (MGVK_SupportsOptimalFormat(device->physicalDevice, candidate, required))
+				return candidate;
+		}
+		return VK_FORMAT_UNDEFINED;
+	}
+	case MGDepthFormat::Depth32Float:
+		return MGVK_SupportsOptimalFormat(device->physicalDevice, VK_FORMAT_D32_SFLOAT, required)
+			? VK_FORMAT_D32_SFLOAT
+			: VK_FORMAT_UNDEFINED;
+	default:
+		return VK_FORMAT_UNDEFINED;
+	}
 }
 
 static VkFormat ToVkFormat(MGVertexElementFormat format)
@@ -1256,7 +1337,14 @@ static void mggCreateImage(MGG_GraphicsDevice* device, VkImageCreateInfo* info, 
 	VK_CHECK_RESULT(res);
 }
 
-static MGG_Texture* CreateDepthTexture(MGG_GraphicsDevice* device, VkFormat format, uint32_t width, uint32_t height, mgint multiSampleCount)
+static MGG_Texture* CreateDepthTexture(
+	MGG_GraphicsDevice* device,
+	VkFormat format,
+	uint32_t width,
+	uint32_t height,
+	mgint multiSampleCount,
+	bool sampleable = false,
+	MGDepthFormat depthFormat = MGDepthFormat::None)
 {
 	// TODO: Could convert this into a
 	// general image creation method.
@@ -1264,6 +1352,11 @@ static MGG_Texture* CreateDepthTexture(MGG_GraphicsDevice* device, VkFormat form
 	MGG_Texture* texture = new MGG_Texture;
 	memset(texture, 0, sizeof(MGG_Texture));
 	texture->id = ++device->currentTextureId;
+	texture->type = MGTextureType::_2D;
+	texture->format = MGSurfaceFormat::Single;
+	texture->isTarget = sampleable;
+	texture->independentDepthStencil = sampleable;
+	texture->depthFormat = depthFormat;
 
 	VkImageCreateInfo& create_info = texture->info;
 	create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1274,14 +1367,17 @@ static MGG_Texture* CreateDepthTexture(MGG_GraphicsDevice* device, VkFormat form
 	create_info.arrayLayers = 1;
     create_info.samples = ToVkSampleCount(multiSampleCount);
 	create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-	create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+		(sampleable ? VK_IMAGE_USAGE_SAMPLED_BIT : 0);
 	create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	texture->multiSampleCount = multiSampleCount;
 	texture->layouts[0] = VK_IMAGE_LAYOUT_UNDEFINED;
-	texture->optimal_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	VkImageLayout optimalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	texture->optimal_layout = sampleable
+		? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		: VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	VkImageLayout optimalLayout = texture->optimal_layout;
     VkImageAspectFlags aspectMask = DetermineAspectMask(format);
 
 	mggCreateImage(device, &create_info, texture);
@@ -1310,12 +1406,18 @@ static MGG_Texture* CreateDepthTexture(MGG_GraphicsDevice* device, VkFormat form
 	return texture;
 }
 
-static VkImageView CreateImageView(MGG_GraphicsDevice* device, MGG_Texture* texture, uint32_t level_count)
+static VkImageView CreateImageView(
+	MGG_GraphicsDevice* device,
+	MGG_Texture* texture,
+	uint32_t level_count,
+	VkImageAspectFlags aspectOverride = 0)
 {
 	VkFormat format = texture->info.format;
 	uint32_t layer_count = texture->info.arrayLayers;
 
-	VkImageAspectFlags aspect_mask = DetermineAspectMask(format);
+	VkImageAspectFlags aspect_mask = aspectOverride != 0
+		? aspectOverride
+		: DetermineAspectMask(format);
 
 	VkImageViewCreateInfo image_view_create_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
 	if (texture->msImage && texture->multiSampleCount)
@@ -2137,7 +2239,7 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
 	MGG_GraphicsDevice_GetCaps(device, legacy);
 	MGG_GraphicsDevice_CapsV2 value{};
 	value.StructSize = sizeof(value);
-	value.AbiVersion = 2;
+	value.AbiVersion = 3;
 	value.ApiMajor = VK_API_VERSION_MAJOR(device->deviceProperties.apiVersion);
 	value.ApiMinor = VK_API_VERSION_MINOR(device->deviceProperties.apiVersion);
 	value.MaxTextureSlots = legacy.MaxTextureSlots;
@@ -2158,6 +2260,15 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
 		value.Features = static_cast<MGNativeGraphicsFeatures>(
 			static_cast<mguint>(value.Features) |
 			static_cast<mguint>(MGNativeGraphicsFeatures::CompletedGpuFrameTiming));
+	}
+	if (MGVK_SelectSampleableDepthFormat(device, MGDepthFormat::Depth32Float) != VK_FORMAT_UNDEFINED ||
+		MGVK_SelectSampleableDepthFormat(device, MGDepthFormat::Depth24) != VK_FORMAT_UNDEFINED ||
+		MGVK_SelectSampleableDepthFormat(device, MGDepthFormat::Depth24Stencil8) != VK_FORMAT_UNDEFINED ||
+		MGVK_SelectSampleableDepthFormat(device, MGDepthFormat::Depth16) != VK_FORMAT_UNDEFINED)
+	{
+		value.Features = static_cast<MGNativeGraphicsFeatures>(
+			static_cast<mguint>(value.Features) |
+			static_cast<mguint>(MGNativeGraphicsFeatures::ExplicitRenderPass));
 	}
 	value.MaxRenderTargets = std::min<mgint>(4, static_cast<mgint>(device->deviceProperties.limits.maxColorAttachments));
 	value.MaxDrawBuffers = value.MaxRenderTargets;
@@ -2988,7 +3099,9 @@ void MGG_GraphicsDevice_Clear(MGG_GraphicsDevice* device, MGClearOptions options
 		if (clearStencil)
 			attachment->aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
-		auto depthTexture = targets->set.targets[0]->depthTexture;
+		auto depthTexture = targets->set.explicitRenderPass
+			? targets->set.depthTarget
+			: targets->set.targets[0]->depthTexture;
 		if (depthTexture) {
 			attachment->aspectMask &= DetermineAspectMask(depthTexture->info.format);
 		}
@@ -3104,7 +3217,8 @@ static void MGVK_DestroyFrameResources(MGG_GraphicsDevice* device, FrameCounter 
 						return false;
 					}
 
-					return	s.targets->set.targets[0] == texture ||
+					return	s.targets->set.depthTarget == texture ||
+						s.targets->set.targets[0] == texture ||
 						s.targets->set.targets[1] == texture ||
 						s.targets->set.targets[2] == texture ||
 						s.targets->set.targets[3] == texture;
@@ -3112,7 +3226,8 @@ static void MGVK_DestroyFrameResources(MGG_GraphicsDevice* device, FrameCounter 
 
 				MGVK_DestroyTargetSets(device, [texture](const MGVK_TargetSetCache* s)
 				{
-					return	s->set.targets[0] == texture ||
+					return	s->set.depthTarget == texture ||
+						s->set.targets[0] == texture ||
 						s->set.targets[1] == texture ||
 						s->set.targets[2] == texture ||
 						s->set.targets[3] == texture;
@@ -3501,6 +3616,17 @@ void MGG_GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture
 		return;
 
 	auto& frame = device->frames[device->frameIndex];
+	device->targets.explicitRenderPass = false;
+	device->targets.depthTarget = nullptr;
+	device->targets.depthLoadAction = MGRenderPassLoadAction::Load;
+	device->targets.depthStoreAction = MGRenderPassStoreAction::Store;
+	device->targets.stencilLoadAction = MGRenderPassLoadAction::Load;
+	device->targets.stencilStoreAction = MGRenderPassStoreAction::Store;
+	for (int index = 0; index < MGVK_NUM_TARGETS; ++index)
+	{
+		device->targets.colorLoadActions[index] = MGRenderPassLoadAction::Load;
+		device->targets.colorStoreActions[index] = MGRenderPassStoreAction::Store;
+	}
 
 	if (targets == nullptr || count == 0)
 	{
@@ -3556,6 +3682,124 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderTargetsV2(
 			return MGGraphicsDeviceStatus::InvalidRenderTarget;
 	}
 	MGG_GraphicsDevice_SetRenderTargets(device, targets, arraySlices, count);
+	return MGGraphicsDeviceStatus::Success;
+}
+
+mgbyte MGG_GraphicsDevice_SupportsDepthStencilTargetFormatV3(
+	MGG_GraphicsDevice* device,
+	MGDepthFormat depthFormat)
+{
+	return device != nullptr &&
+		MGVK_SelectSampleableDepthFormat(device, depthFormat) != VK_FORMAT_UNDEFINED
+		? 1
+		: 0;
+}
+
+MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderPassV3(
+	MGG_GraphicsDevice* device,
+	MGG_RenderPassColorAttachment* colorAttachments,
+	mgint colorAttachmentCount,
+	MGG_RenderPassDepthStencilAttachment* depthStencilAttachment)
+{
+	if (device == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+	if (colorAttachmentCount <= 0 || colorAttachmentCount > static_cast<mgint>(MGVK_NUM_TARGETS))
+		return MGGraphicsDeviceStatus::InvalidRenderTargetCount;
+	if (colorAttachments == nullptr)
+		return MGGraphicsDeviceStatus::InvalidArgument;
+
+	uint32_t width = 0;
+	uint32_t height = 0;
+	for (mgint index = 0; index < colorAttachmentCount; ++index)
+	{
+		const auto& attachment = colorAttachments[index];
+		auto* target = static_cast<MGG_Texture*>(attachment.Target);
+		if (target == nullptr || !target->isTarget || target->independentDepthStencil)
+			return MGGraphicsDeviceStatus::InvalidRenderTarget;
+		if (target->multiSampleCount > 1)
+			return MGGraphicsDeviceStatus::RenderTargetMultisamplingNotSupported;
+		if (attachment.ArraySlice < 0 ||
+			attachment.ArraySlice >= static_cast<mgint>(target->info.arrayLayers))
+			return MGGraphicsDeviceStatus::InvalidRenderTarget;
+		if (!MGVKValidRenderPassActions(attachment.LoadAction, attachment.StoreAction))
+			return MGGraphicsDeviceStatus::InvalidArgument;
+		if (index == 0)
+		{
+			width = target->info.extent.width;
+			height = target->info.extent.height;
+		}
+		else if (target->info.extent.width != width || target->info.extent.height != height)
+		{
+			return MGGraphicsDeviceStatus::RenderTargetDimensionsMismatch;
+		}
+	}
+
+	MGG_Texture* depthTarget = nullptr;
+	if (depthStencilAttachment != nullptr)
+	{
+		depthTarget = static_cast<MGG_Texture*>(depthStencilAttachment->Target);
+		if (depthTarget == nullptr || !depthTarget->independentDepthStencil)
+			return MGGraphicsDeviceStatus::InvalidRenderTarget;
+		if (depthTarget->multiSampleCount > 1)
+			return MGGraphicsDeviceStatus::RenderTargetMultisamplingNotSupported;
+		if (depthTarget->info.extent.width != width || depthTarget->info.extent.height != height)
+			return MGGraphicsDeviceStatus::RenderTargetDimensionsMismatch;
+		if (!MGVKValidRenderPassActions(
+				depthStencilAttachment->DepthLoadAction,
+				depthStencilAttachment->DepthStoreAction) ||
+			!MGVKValidRenderPassActions(
+				depthStencilAttachment->StencilLoadAction,
+				depthStencilAttachment->StencilStoreAction))
+			return MGGraphicsDeviceStatus::InvalidArgument;
+	}
+
+	for (int index = 0; index < MGVK_NUM_TARGETS; ++index)
+	{
+		if (index < colorAttachmentCount)
+		{
+			const auto& attachment = colorAttachments[index];
+			auto* target = static_cast<MGG_Texture*>(attachment.Target);
+			device->targets.targets[index] = target;
+			device->targets.arraySlices[index] = target->info.arrayLayers > 1
+				? std::optional<int>(attachment.ArraySlice)
+				: std::nullopt;
+			device->targets.colorLoadActions[index] = attachment.LoadAction;
+			device->targets.colorStoreActions[index] = attachment.StoreAction;
+			device->explicitClearColors[index] = attachment.ClearColor;
+		}
+		else
+		{
+			device->targets.targets[index] = nullptr;
+			device->targets.arraySlices[index] = std::nullopt;
+			device->targets.colorLoadActions[index] = MGRenderPassLoadAction::Load;
+			device->targets.colorStoreActions[index] = MGRenderPassStoreAction::Store;
+			device->explicitClearColors[index] = {};
+		}
+		device->targets.firstUse[index] = false;
+	}
+	device->targets.numTargets = colorAttachmentCount;
+	device->targets.explicitRenderPass = true;
+	device->targets.depthTarget = depthTarget;
+	device->targets.depthLoadAction = depthStencilAttachment != nullptr
+		? depthStencilAttachment->DepthLoadAction
+		: MGRenderPassLoadAction::Load;
+	device->targets.depthStoreAction = depthStencilAttachment != nullptr
+		? depthStencilAttachment->DepthStoreAction
+		: MGRenderPassStoreAction::Store;
+	device->targets.stencilLoadAction = depthStencilAttachment != nullptr
+		? depthStencilAttachment->StencilLoadAction
+		: MGRenderPassLoadAction::Load;
+	device->targets.stencilStoreAction = depthStencilAttachment != nullptr
+		? depthStencilAttachment->StencilStoreAction
+		: MGRenderPassStoreAction::Store;
+	device->explicitClearDepth = depthStencilAttachment != nullptr
+		? depthStencilAttachment->ClearDepth
+		: 1.0f;
+	device->explicitClearStencil = depthStencilAttachment != nullptr
+		? depthStencilAttachment->ClearStencil
+		: 0;
+	device->pipelineStateDirty = true;
+	device->renderTargetDirty = true;
 	return MGGraphicsDeviceStatus::Success;
 }
 
@@ -3856,7 +4100,8 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 			continue;
 		}
 
-		device->targets.firstUse[i] = target->writeFrame != currentFrame;
+		device->targets.firstUse[i] = !device->targets.explicitRenderPass &&
+			target->writeFrame != currentFrame;
 
 		// Mark the targets as being written to this frame.
 		target->writeFrame = currentFrame;
@@ -3870,7 +4115,8 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 		// affect a different slice (historically slice zero) while the attachment
 		// can reference any layer, leaving the cube in mixed, untracked layouts
 		// before mip generation.
-		if (!target->isSwapchain &&
+		if (!device->targets.explicitRenderPass &&
+			!target->isSwapchain &&
 			!device->targets.arraySlices[i].has_value() &&
 			target->layouts[0] != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 		{
@@ -3891,6 +4137,11 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 
 			target->layouts[0] = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		}
+	}
+	if (device->targets.explicitRenderPass && device->targets.depthTarget != nullptr)
+	{
+		device->targets.depthTarget->frame = currentFrame;
+		device->targets.depthTarget->writeFrame = currentFrame;
 	}
 
 	// Lookup the texture set in the cache.
@@ -3957,7 +4208,19 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
             desc.format = target->info.format;
             desc.samples = ToVkSampleCount(target->multiSampleCount);
 
-            if (isMsaa)
+			if (cached->set.explicitRenderPass)
+			{
+				desc.loadOp = ToVkAttachmentLoadOp(cached->set.colorLoadActions[i]);
+				desc.storeOp = ToVkAttachmentStoreOp(cached->set.colorStoreActions[i]);
+				desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+				desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+				desc.initialLayout = cached->set.colorLoadActions[i] == MGRenderPassLoadAction::Load
+					? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					: VK_IMAGE_LAYOUT_UNDEFINED;
+				desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				target->layouts[0] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			}
+			else if (isMsaa)
             {
 				desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 				desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -3992,7 +4255,9 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 			num_color_attachments++;
 		}
 
-		auto depth = cached->set.targets[0]->depthTexture;
+		auto depth = cached->set.explicitRenderPass
+			? cached->set.depthTarget
+			: cached->set.targets[0]->depthTexture;
 		if (depth)
 		{
 			bool firstUse = cached->set.firstUse[0];
@@ -4005,12 +4270,28 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
             auto& desc = attachment_descs[num_attachments];
             desc.format = depth->info.format;
             desc.samples = ToVkSampleCount(depth->multiSampleCount);
-            desc.loadOp = firstUse ? VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD;
-            desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            desc.stencilLoadOp = firstUse ? VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD;
-            desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-            desc.initialLayout = firstUse ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			if (cached->set.explicitRenderPass)
+			{
+				desc.loadOp = ToVkAttachmentLoadOp(cached->set.depthLoadAction);
+				desc.storeOp = ToVkAttachmentStoreOp(cached->set.depthStoreAction);
+				desc.stencilLoadOp = ToVkAttachmentLoadOp(cached->set.stencilLoadAction);
+				desc.stencilStoreOp = ToVkAttachmentStoreOp(cached->set.stencilStoreAction);
+				desc.initialLayout = cached->set.depthLoadAction == MGRenderPassLoadAction::Load ||
+					cached->set.stencilLoadAction == MGRenderPassLoadAction::Load
+					? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					: VK_IMAGE_LAYOUT_UNDEFINED;
+				desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				depth->layouts[0] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			}
+			else
+			{
+				desc.loadOp = firstUse ? VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD;
+				desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+				desc.stencilLoadOp = firstUse ? VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD;
+				desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+				desc.initialLayout = firstUse ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+				desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			}
 			num_attachments++;
 		}
 
@@ -4077,16 +4358,28 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 				dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 				dependencies[0].dstSubpass = 0;
 				dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-				dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+				dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+					(cached->set.explicitRenderPass && depth
+						? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
+						: 0);
 				dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-				dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+				dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+					(cached->set.explicitRenderPass && depth
+						? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+						: 0);
 				dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 				dependencies[1].srcSubpass = 0;
 				dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-				dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+				dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+					(cached->set.explicitRenderPass && depth
+						? VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
+						: 0);
 				dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-				dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+				dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+					(cached->set.explicitRenderPass && depth
+						? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+						: 0);
 				dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 				dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 				create_info.dependencyCount = 2;
@@ -4133,8 +4426,27 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 	render_pass_begin_info.framebuffer = cached->framebuffer;
 	render_pass_begin_info.renderArea = render_area;
 
-	render_pass_begin_info.clearValueCount = 0;
-	render_pass_begin_info.pClearValues = NULL;
+	VkClearValue clearValues[MAX_ATTACHMENTS] = {};
+	if (cached->set.explicitRenderPass)
+	{
+		for (int index = 0; index < cached->set.numTargets; ++index)
+		{
+			const auto& color = device->explicitClearColors[index];
+			clearValues[index].color.float32[0] = color.X;
+			clearValues[index].color.float32[1] = color.Y;
+			clearValues[index].color.float32[2] = color.Z;
+			clearValues[index].color.float32[3] = color.W;
+		}
+		if (cached->set.depthTarget != nullptr)
+		{
+			const int depthIndex = cached->set.numTargets;
+			clearValues[depthIndex].depthStencil.depth = device->explicitClearDepth;
+			clearValues[depthIndex].depthStencil.stencil = device->explicitClearStencil;
+		}
+		render_pass_begin_info.clearValueCount = cached->set.numTargets +
+			(cached->set.depthTarget != nullptr ? 1 : 0);
+		render_pass_begin_info.pClearValues = clearValues;
+	}
 
 	VkQueryControlFlags flags = 0;
 	if (device->deviceFeatures.occlusionQueryPrecise)
@@ -6109,6 +6421,50 @@ MGG_Texture* MGG_RenderTarget_Create(
 
 	device->all_textures.push_back(texture);
 
+	return texture;
+}
+
+MGG_Texture* MGG_DepthStencilTarget_Create(
+	MGG_GraphicsDevice* device,
+	mgint width,
+	mgint height,
+	MGDepthFormat depthFormat)
+{
+	if (device == nullptr || width <= 0 || height <= 0)
+		return nullptr;
+
+	const VkFormat selectedFormat = MGVK_SelectSampleableDepthFormat(device, depthFormat);
+	if (selectedFormat == VK_FORMAT_UNDEFINED)
+		return nullptr;
+
+	auto* texture = CreateDepthTexture(
+		device,
+		selectedFormat,
+		static_cast<uint32_t>(width),
+		static_cast<uint32_t>(height),
+		1,
+		true,
+		depthFormat);
+	if (texture == nullptr)
+		return nullptr;
+
+	texture->view = CreateImageView(device, texture, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
+	texture->target_view = CreateImageView(device, texture, 1);
+	if (texture->view == VK_NULL_HANDLE || texture->target_view == VK_NULL_HANDLE)
+	{
+		if (texture->view != VK_NULL_HANDLE)
+			vkDestroyImageView(device->device, texture->view, nullptr);
+		if (texture->target_view != VK_NULL_HANDLE)
+			vkDestroyImageView(device->device, texture->target_view, nullptr);
+		vmaDestroyImage(device->allocator, texture->image, texture->allocation);
+		delete texture;
+		return nullptr;
+	}
+
+	VK_SET_OBJECT_NAME(device->device, texture->image, VK_OBJECT_TYPE_IMAGE, "MGG_DepthStencilTarget.image");
+	VK_SET_OBJECT_NAME(device->device, texture->view, VK_OBJECT_TYPE_IMAGE_VIEW, "MGG_DepthStencilTarget.sampleView");
+	VK_SET_OBJECT_NAME(device->device, texture->target_view, VK_OBJECT_TYPE_IMAGE_VIEW, "MGG_DepthStencilTarget.targetView");
+	device->all_textures.push_back(texture);
 	return texture;
 }
 

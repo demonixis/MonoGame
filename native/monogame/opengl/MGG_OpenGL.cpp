@@ -186,6 +186,7 @@ namespace
     X(void, FramebufferTextureLayer, (GLenum, GLenum, GLuint, GLint, GLint)) \
     X(void, FramebufferRenderbuffer, (GLenum, GLenum, GLenum, GLuint)) \
     X(void, DrawBuffers, (GLsizei, const GLenum*)) \
+    X(void, InvalidateFramebuffer, (GLenum, GLsizei, const GLenum*)) \
     X(GLenum, CheckFramebufferStatus, (GLenum)) \
     X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum)) \
     X(void, GenRenderbuffers, (GLsizei, GLuint*)) \
@@ -232,6 +233,9 @@ namespace
     X(void, ClearDepthf, (GLfloat)) \
     X(void, ClearStencil, (GLint)) \
     X(void, Clear, (GLbitfield)) \
+    X(void, ClearBufferfv, (GLenum, GLint, const GLfloat*)) \
+    X(void, ClearBufferiv, (GLenum, GLint, const GLint*)) \
+    X(void, ClearBufferfi, (GLenum, GLint, GLfloat, GLint)) \
     X(void, ReadPixels, (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*)) \
     X(void, EnableVertexAttribArray, (GLuint)) \
     X(void, DisableVertexAttribArray, (GLuint)) \
@@ -283,7 +287,8 @@ namespace
                 Enable && Disable && BlendColor && BlendFuncSeparate && BlendEquationSeparate &&
                 ColorMask && DepthMask && DepthFunc && StencilMask && StencilFunc && StencilOp &&
                 CullFace && FrontFace && Scissor && Viewport && DepthRangef &&
-                ClearColor && ClearDepthf && ClearStencil && Clear && ReadPixels &&
+                ClearColor && ClearDepthf && ClearStencil && Clear &&
+                ClearBufferfv && ClearBufferiv && ClearBufferfi && ReadPixels &&
                 EnableVertexAttribArray && DisableVertexAttribArray && VertexAttribPointer &&
                 VertexAttribIPointer && VertexAttribDivisor && DrawArrays && DrawElements &&
                 DrawElementsInstanced && GenQueries && DeleteQueries && BeginQuery && EndQuery &&
@@ -365,6 +370,7 @@ struct MGG_Texture
     GLuint msaaColor = 0;
     GLuint depthBuffer = 0;
     MGDepthFormat depthFormat = MGDepthFormat::None;
+    bool independentDepthStencil = false;
     bool owned = true;
     std::vector<bool> compressedDefined;
 };
@@ -409,6 +415,11 @@ struct MGG_GraphicsDevice
     MGG_Texture* renderTargets[MGGLMaxColorTargets]{};
     mgint renderTargetSlices[MGGLMaxColorTargets]{};
     mgint renderTargetCount = 0;
+    bool explicitRenderPass = false;
+    MGG_Texture* explicitDepthStencilTarget = nullptr;
+    MGRenderPassStoreAction explicitColorStoreActions[MGGLMaxColorTargets]{};
+    MGRenderPassStoreAction explicitDepthStoreAction = MGRenderPassStoreAction::Store;
+    MGRenderPassStoreAction explicitStencilStoreAction = MGRenderPassStoreAction::Store;
     MGG_Buffer* constantBuffers[2][MGGLMaxTextureSlots]{};
     MGG_Texture* textures[2][MGGLMaxTextureSlots]{};
     MGG_SamplerState* samplers[2][MGGLMaxTextureSlots]{};
@@ -620,8 +631,53 @@ namespace
             case MGDepthFormat::Depth16: return GL_DEPTH_COMPONENT16;
             case MGDepthFormat::Depth24: return GL_DEPTH_COMPONENT24;
             case MGDepthFormat::Depth24Stencil8: return GL_DEPTH24_STENCIL8;
+            case MGDepthFormat::Depth32Float: return GL_DEPTH_COMPONENT32F;
             default: return 0;
         }
+    }
+
+    static bool SupportsSampleableDepthFormat(MGDepthFormat format)
+    {
+        return format == MGDepthFormat::Depth16 ||
+            format == MGDepthFormat::Depth24 ||
+            format == MGDepthFormat::Depth24Stencil8 ||
+            format == MGDepthFormat::Depth32Float;
+    }
+
+    static bool GetDepthTextureFormat(
+        MGDepthFormat depthFormat,
+        GLenum& format,
+        GLenum& type)
+    {
+        format = GL_DEPTH_COMPONENT;
+        type = GL_UNSIGNED_INT;
+        switch (depthFormat)
+        {
+            case MGDepthFormat::Depth16:
+                type = GL_UNSIGNED_SHORT;
+                return true;
+            case MGDepthFormat::Depth24:
+                return true;
+            case MGDepthFormat::Depth24Stencil8:
+                format = GL_DEPTH_STENCIL;
+                type = GL_UNSIGNED_INT_24_8;
+                return true;
+            case MGDepthFormat::Depth32Float:
+                type = GL_FLOAT;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    static bool ValidRenderPassActions(
+        MGRenderPassLoadAction loadAction,
+        MGRenderPassStoreAction storeAction)
+    {
+        return loadAction >= MGRenderPassLoadAction::Load &&
+            loadAction <= MGRenderPassLoadAction::DontCare &&
+            storeAction >= MGRenderPassStoreAction::Store &&
+            storeAction <= MGRenderPassStoreAction::DontCare;
     }
 
     struct Reader
@@ -689,6 +745,65 @@ namespace
     static bool MakeCurrent(MGG_GraphicsDevice* device)
     {
         return device && MGGL_Host_MakeCurrent(device->host);
+    }
+
+    static bool ProbeSampleableDepthFormat(
+        MGG_GraphicsDevice* device,
+        MGDepthFormat depthFormat)
+    {
+        GLenum format = 0;
+        GLenum type = 0;
+        if (!MakeCurrent(device) ||
+            !SupportsSampleableDepthFormat(depthFormat) ||
+            !GetDepthTextureFormat(depthFormat, format, type))
+            return false;
+
+        GLint previousTexture = 0;
+        GLint previousDrawFramebuffer = 0;
+        GLint previousReadFramebuffer = 0;
+        gl.GetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
+        gl.GetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &previousDrawFramebuffer);
+        gl.GetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
+
+        GLuint texture = 0;
+        GLuint framebuffer = 0;
+        gl.GenTextures(1, &texture);
+        gl.GenFramebuffers(1, &framebuffer);
+        if (texture == 0 || framebuffer == 0)
+        {
+            if (framebuffer != 0)
+                gl.DeleteFramebuffers(1, &framebuffer);
+            if (texture != 0)
+                gl.DeleteTextures(1, &texture);
+            return false;
+        }
+        gl.BindTexture(GL_TEXTURE_2D, texture);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl.TexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            ToDepthInternal(depthFormat),
+            1,
+            1,
+            0,
+            format,
+            type,
+            nullptr);
+
+        gl.BindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        const GLenum attachment = depthFormat == MGDepthFormat::Depth24Stencil8
+            ? GL_DEPTH_STENCIL_ATTACHMENT
+            : GL_DEPTH_ATTACHMENT;
+        gl.FramebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, texture, 0);
+        const bool supported = gl.CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+
+        gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(previousDrawFramebuffer));
+        gl.BindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
+        gl.BindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
+        gl.DeleteFramebuffers(1, &framebuffer);
+        gl.DeleteTextures(1, &texture);
+        return supported;
     }
 
     static MGGLProgram* GetProgram(MGG_GraphicsDevice* device)
@@ -1187,7 +1302,7 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
     MGG_GraphicsDevice_GetCaps(device, legacy);
     MGG_GraphicsDevice_CapsV2 value{};
     value.StructSize = sizeof(value);
-    value.AbiVersion = 2;
+    value.AbiVersion = 3;
     value.ApiMajor = device->apiMajor;
     value.ApiMinor = device->apiMinor;
     value.MaxTextureSlots = legacy.MaxTextureSlots;
@@ -1198,6 +1313,15 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
     value.TextureCompression = legacy.TextureCompression;
     if (device->supportsAnisotropy)
         value.Features = MGNativeGraphicsFeatures::AnisotropicFiltering;
+    if (ProbeSampleableDepthFormat(device, MGDepthFormat::Depth32Float) ||
+        ProbeSampleableDepthFormat(device, MGDepthFormat::Depth24) ||
+        ProbeSampleableDepthFormat(device, MGDepthFormat::Depth24Stencil8) ||
+        ProbeSampleableDepthFormat(device, MGDepthFormat::Depth16))
+    {
+        value.Features = static_cast<MGNativeGraphicsFeatures>(
+            static_cast<mguint>(value.Features) |
+            static_cast<mguint>(MGNativeGraphicsFeatures::ExplicitRenderPass));
+    }
     value.MaxAnisotropy = device->maxAnisotropy;
     value.MaxRenderTargets = std::min(
         MGGLMaxColorTargets,
@@ -1460,7 +1584,9 @@ static MGGraphicsDeviceStatus MGGLSetRenderTargets(
     MGG_GraphicsDevice* device,
     MGG_Texture** targets,
     mgint* slices,
-    mgint count)
+    mgint count,
+    MGG_Texture* independentDepthStencil = nullptr,
+    bool explicitRenderPass = false)
 {
     if (!MakeCurrent(device))
         return MGGraphicsDeviceStatus::DeviceUnavailable;
@@ -1479,15 +1605,46 @@ static MGGraphicsDeviceStatus MGGLSetRenderTargets(
             const MGG_Texture* target = targets[index];
             if (target == nullptr || !target->renderTarget)
                 return MGGraphicsDeviceStatus::InvalidRenderTarget;
-            if (count > 1 && target->format != MGSurfaceFormat::Color)
+            if (!explicitRenderPass && count > 1 && target->format != MGSurfaceFormat::Color)
                 return MGGraphicsDeviceStatus::RenderTargetFormatNotSupported;
             if (target->width != first->width || target->height != first->height)
                 return MGGraphicsDeviceStatus::RenderTargetDimensionsMismatch;
-            if (count > 1 && target->samples > 1)
+            if ((explicitRenderPass || count > 1) && target->samples > 1)
                 return MGGraphicsDeviceStatus::RenderTargetMultisamplingNotSupported;
-            if (index > 0 && target->depthFormat != MGDepthFormat::None)
+            if (!explicitRenderPass && index > 0 && target->depthFormat != MGDepthFormat::None)
                 return MGGraphicsDeviceStatus::RenderTargetDepthAttachmentNotSupported;
         }
+        if (independentDepthStencil != nullptr)
+        {
+            if (!independentDepthStencil->independentDepthStencil)
+                return MGGraphicsDeviceStatus::InvalidRenderTarget;
+            if (independentDepthStencil->width != first->width ||
+                independentDepthStencil->height != first->height)
+                return MGGraphicsDeviceStatus::RenderTargetDimensionsMismatch;
+            if (independentDepthStencil->samples > 1)
+                return MGGraphicsDeviceStatus::RenderTargetMultisamplingNotSupported;
+        }
+    }
+
+    if (device->explicitRenderPass && gl.InvalidateFramebuffer)
+    {
+        std::array<GLenum, MGGLMaxColorTargets + 2> discardAttachments{};
+        GLsizei discardCount = 0;
+        for (mgint index = 0; index < device->renderTargetCount; ++index)
+        {
+            if (device->explicitColorStoreActions[index] == MGRenderPassStoreAction::DontCare)
+                discardAttachments[discardCount++] = GL_COLOR_ATTACHMENT0 + index;
+        }
+        if (device->explicitDepthStencilTarget != nullptr)
+        {
+            if (device->explicitDepthStoreAction == MGRenderPassStoreAction::DontCare)
+                discardAttachments[discardCount++] = GL_DEPTH_ATTACHMENT;
+            if (device->explicitDepthStencilTarget->depthFormat == MGDepthFormat::Depth24Stencil8 &&
+                device->explicitStencilStoreAction == MGRenderPassStoreAction::DontCare)
+                discardAttachments[discardCount++] = GL_STENCIL_ATTACHMENT;
+        }
+        if (discardCount > 0)
+            gl.InvalidateFramebuffer(GL_FRAMEBUFFER, discardCount, discardAttachments.data());
     }
 
     std::array<MGG_Texture*, MGGLMaxColorTargets> incomingTargets{};
@@ -1498,6 +1655,17 @@ static MGGraphicsDeviceStatus MGGLSetRenderTargets(
         incomingSlices[index] = slices ? slices[index] : 0;
     }
     device->renderTargetCount = count;
+    device->explicitRenderPass = explicitRenderPass;
+    device->explicitDepthStencilTarget = independentDepthStencil;
+    if (!explicitRenderPass)
+    {
+        std::fill(
+            std::begin(device->explicitColorStoreActions),
+            std::end(device->explicitColorStoreActions),
+            MGRenderPassStoreAction::Store);
+        device->explicitDepthStoreAction = MGRenderPassStoreAction::Store;
+        device->explicitStencilStoreAction = MGRenderPassStoreAction::Store;
+    }
     std::memset(device->renderTargets, 0, sizeof(device->renderTargets));
     if (count == 0)
     {
@@ -1509,6 +1677,8 @@ static MGGraphicsDeviceStatus MGGLSetRenderTargets(
     gl.BindFramebuffer(GL_FRAMEBUFFER, device->framebuffer);
     gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
     gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, 0);
+    gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+    gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
     std::array<GLenum, MGGLMaxColorTargets> drawBuffers{};
     for (int index = 0; index < MGGLMaxColorTargets; ++index)
     {
@@ -1525,7 +1695,19 @@ static MGGraphicsDeviceStatus MGGLSetRenderTargets(
     gl.DrawBuffers(count, drawBuffers.data());
 
     auto* first = incomingTargets[0];
-    if (first && first->depthBuffer)
+    if (independentDepthStencil != nullptr)
+    {
+        const GLenum attachment = independentDepthStencil->depthFormat == MGDepthFormat::Depth24Stencil8
+            ? GL_DEPTH_STENCIL_ATTACHMENT
+            : GL_DEPTH_ATTACHMENT;
+        gl.FramebufferTexture2D(
+            GL_FRAMEBUFFER,
+            attachment,
+            GL_TEXTURE_2D,
+            independentDepthStencil->handle,
+            0);
+    }
+    else if (first && first->depthBuffer)
     {
         const GLenum attachment = first->depthFormat == MGDepthFormat::Depth24Stencil8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT;
         gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, first->depthBuffer);
@@ -1552,6 +1734,165 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderTargetsV2(
     mgint count)
 {
     return MGGLSetRenderTargets(device, targets, slices, count);
+}
+
+mgbyte MGG_GraphicsDevice_SupportsDepthStencilTargetFormatV3(
+    MGG_GraphicsDevice* device,
+    MGDepthFormat depthFormat)
+{
+    return ProbeSampleableDepthFormat(device, depthFormat) ? 1 : 0;
+}
+
+static void MGGLApplyExplicitRenderPassClears(
+    MGG_GraphicsDevice* device,
+    MGG_RenderPassColorAttachment* colorAttachments,
+    mgint colorAttachmentCount,
+    MGG_RenderPassDepthStencilAttachment* depthStencilAttachment)
+{
+    bool clearColor = false;
+    for (mgint index = 0; index < colorAttachmentCount; ++index)
+        clearColor |= colorAttachments[index].LoadAction == MGRenderPassLoadAction::Clear;
+    const bool clearDepth = depthStencilAttachment != nullptr &&
+        depthStencilAttachment->DepthLoadAction == MGRenderPassLoadAction::Clear;
+    const bool clearStencil = depthStencilAttachment != nullptr &&
+        static_cast<MGG_Texture*>(depthStencilAttachment->Target)->depthFormat == MGDepthFormat::Depth24Stencil8 &&
+        depthStencilAttachment->StencilLoadAction == MGRenderPassLoadAction::Clear;
+    if (!clearColor && !clearDepth && !clearStencil)
+        return;
+
+    if (device->scissorTestEnabled)
+        gl.Disable(GL_SCISSOR_TEST);
+    if (clearColor)
+    {
+        gl.ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        for (mgint index = 0; index < colorAttachmentCount; ++index)
+        {
+            if (colorAttachments[index].LoadAction == MGRenderPassLoadAction::Clear)
+                gl.ClearBufferfv(GL_COLOR, index, &colorAttachments[index].ClearColor.X);
+        }
+        gl.ColorMask(
+            device->colorWriteMask[0],
+            device->colorWriteMask[1],
+            device->colorWriteMask[2],
+            device->colorWriteMask[3]);
+    }
+    if (clearDepth && clearStencil)
+    {
+        gl.DepthMask(GL_TRUE);
+        gl.StencilMask(0xFFFFFFFFu);
+        gl.ClearBufferfi(
+            GL_DEPTH_STENCIL,
+            0,
+            depthStencilAttachment->ClearDepth,
+            depthStencilAttachment->ClearStencil);
+        gl.DepthMask(device->depthWriteMask);
+        gl.StencilMask(device->stencilWriteMask);
+    }
+    else if (clearDepth)
+    {
+        gl.DepthMask(GL_TRUE);
+        gl.ClearBufferfv(GL_DEPTH, 0, &depthStencilAttachment->ClearDepth);
+        gl.DepthMask(device->depthWriteMask);
+    }
+    else if (clearStencil)
+    {
+        gl.StencilMask(0xFFFFFFFFu);
+        gl.ClearBufferiv(GL_STENCIL, 0, &depthStencilAttachment->ClearStencil);
+        gl.StencilMask(device->stencilWriteMask);
+    }
+    if (device->scissorTestEnabled)
+        gl.Enable(GL_SCISSOR_TEST);
+}
+
+MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderPassV3(
+    MGG_GraphicsDevice* device,
+    MGG_RenderPassColorAttachment* colorAttachments,
+    mgint colorAttachmentCount,
+    MGG_RenderPassDepthStencilAttachment* depthStencilAttachment)
+{
+    if (device == nullptr)
+        return MGGraphicsDeviceStatus::InvalidArgument;
+    if (colorAttachmentCount <= 0 || colorAttachmentCount > MGGLMaxColorTargets)
+        return MGGraphicsDeviceStatus::InvalidRenderTargetCount;
+    if (colorAttachments == nullptr)
+        return MGGraphicsDeviceStatus::InvalidArgument;
+
+    std::array<MGG_Texture*, MGGLMaxColorTargets> targets{};
+    std::array<mgint, MGGLMaxColorTargets> slices{};
+    for (mgint index = 0; index < colorAttachmentCount; ++index)
+    {
+        const auto& attachment = colorAttachments[index];
+        targets[index] = static_cast<MGG_Texture*>(attachment.Target);
+        slices[index] = attachment.ArraySlice;
+        if (targets[index] == nullptr || targets[index]->independentDepthStencil)
+            return MGGraphicsDeviceStatus::InvalidRenderTarget;
+        if (!ValidRenderPassActions(attachment.LoadAction, attachment.StoreAction))
+            return MGGraphicsDeviceStatus::InvalidArgument;
+    }
+
+    MGG_Texture* depthTarget = nullptr;
+    if (depthStencilAttachment != nullptr)
+    {
+        depthTarget = static_cast<MGG_Texture*>(depthStencilAttachment->Target);
+        if (depthTarget == nullptr || !depthTarget->independentDepthStencil)
+            return MGGraphicsDeviceStatus::InvalidRenderTarget;
+        if (!ValidRenderPassActions(
+                depthStencilAttachment->DepthLoadAction,
+                depthStencilAttachment->DepthStoreAction) ||
+            !ValidRenderPassActions(
+                depthStencilAttachment->StencilLoadAction,
+                depthStencilAttachment->StencilStoreAction))
+            return MGGraphicsDeviceStatus::InvalidArgument;
+    }
+
+    const auto status = MGGLSetRenderTargets(
+        device,
+        targets.data(),
+        slices.data(),
+        colorAttachmentCount,
+        depthTarget,
+        true);
+    if (status != MGGraphicsDeviceStatus::Success)
+        return status;
+
+    if (gl.InvalidateFramebuffer)
+    {
+        std::array<GLenum, MGGLMaxColorTargets + 2> discardAttachments{};
+        GLsizei discardCount = 0;
+        for (mgint index = 0; index < colorAttachmentCount; ++index)
+        {
+            if (colorAttachments[index].LoadAction == MGRenderPassLoadAction::DontCare)
+                discardAttachments[discardCount++] = GL_COLOR_ATTACHMENT0 + index;
+        }
+        if (depthStencilAttachment != nullptr)
+        {
+            if (depthStencilAttachment->DepthLoadAction == MGRenderPassLoadAction::DontCare)
+                discardAttachments[discardCount++] = GL_DEPTH_ATTACHMENT;
+            if (depthTarget->depthFormat == MGDepthFormat::Depth24Stencil8 &&
+                depthStencilAttachment->StencilLoadAction == MGRenderPassLoadAction::DontCare)
+                discardAttachments[discardCount++] = GL_STENCIL_ATTACHMENT;
+        }
+        if (discardCount > 0)
+            gl.InvalidateFramebuffer(GL_FRAMEBUFFER, discardCount, discardAttachments.data());
+    }
+
+    for (mgint index = 0; index < colorAttachmentCount; ++index)
+        device->explicitColorStoreActions[index] = colorAttachments[index].StoreAction;
+    for (mgint index = colorAttachmentCount; index < MGGLMaxColorTargets; ++index)
+        device->explicitColorStoreActions[index] = MGRenderPassStoreAction::Store;
+    device->explicitDepthStoreAction = depthStencilAttachment != nullptr
+        ? depthStencilAttachment->DepthStoreAction
+        : MGRenderPassStoreAction::Store;
+    device->explicitStencilStoreAction = depthStencilAttachment != nullptr
+        ? depthStencilAttachment->StencilStoreAction
+        : MGRenderPassStoreAction::Store;
+
+    MGGLApplyExplicitRenderPassClears(
+        device,
+        colorAttachments,
+        colorAttachmentCount,
+        depthStencilAttachment);
+    return MGGraphicsDeviceStatus::Success;
 }
 
 void MGG_GraphicsDevice_SetConstantBuffer(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_Buffer* buffer)
@@ -1937,6 +2278,57 @@ MGG_Texture* MGG_RenderTarget_Create(MGG_GraphicsDevice* device, MGTextureType t
     return texture;
 }
 
+MGG_Texture* MGG_DepthStencilTarget_Create(
+    MGG_GraphicsDevice* device,
+    mgint width,
+    mgint height,
+    MGDepthFormat depthFormat)
+{
+    if (width <= 0 || height <= 0 ||
+        !ProbeSampleableDepthFormat(device, depthFormat))
+        return nullptr;
+
+    GLenum format = 0;
+    GLenum type = 0;
+    if (!GetDepthTextureFormat(depthFormat, format, type))
+        return nullptr;
+
+    auto* texture = new MGG_Texture();
+    texture->target = GL_TEXTURE_2D;
+    texture->type = MGTextureType::_2D;
+    texture->format = MGSurfaceFormat::Single;
+    texture->glFormat = { ToDepthInternal(depthFormat), format, type, false };
+    texture->width = width;
+    texture->height = height;
+    texture->depth = 1;
+    texture->mipmaps = 1;
+    texture->slices = 1;
+    texture->renderTarget = true;
+    texture->samples = 1;
+    texture->depthFormat = depthFormat;
+    texture->independentDepthStencil = true;
+
+    gl.GenTextures(1, &texture->handle);
+    gl.BindTexture(GL_TEXTURE_2D, texture->handle);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    gl.TexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        texture->glFormat.internalFormat,
+        width,
+        height,
+        0,
+        texture->glFormat.format,
+        texture->glFormat.type,
+        nullptr);
+    return texture;
+}
+
 void MGG_Texture_Destroy(MGG_GraphicsDevice* device, MGG_Texture* texture)
 {
     if (!texture) return;
@@ -1954,6 +2346,11 @@ void MGG_Texture_Destroy(MGG_GraphicsDevice* device, MGG_Texture* texture)
         {
             if (device->renderTargets[index] == texture)
                 device->renderTargets[index] = nullptr;
+        }
+        if (device->explicitDepthStencilTarget == texture)
+        {
+            device->explicitDepthStencilTarget = nullptr;
+            device->explicitRenderPass = false;
         }
     }
     if (MakeCurrent(device))

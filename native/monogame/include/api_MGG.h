@@ -57,6 +57,8 @@ MG_EXPORT void MGG_GraphicsDevice_SetViewport(MGG_GraphicsDevice* device, mgint 
 MG_EXPORT void MGG_GraphicsDevice_SetScissorRectangle(MGG_GraphicsDevice* device, mgint x, mgint y, mgint width, mgint height);
 MG_EXPORT void MGG_GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture** targets, mgint* arraySlices, mgint count);
 MG_EXPORT MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderTargetsV2(MGG_GraphicsDevice* device, MGG_Texture** targets, mgint* arraySlices, mgint count);
+MG_EXPORT MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderPassV3(MGG_GraphicsDevice* device, MGG_RenderPassColorAttachment* colorAttachments, mgint colorAttachmentCount, MGG_RenderPassDepthStencilAttachment* depthStencilAttachment);
+MG_EXPORT mgbyte MGG_GraphicsDevice_SupportsDepthStencilTargetFormatV3(MGG_GraphicsDevice* device, MGDepthFormat depthFormat);
 MG_EXPORT void MGG_GraphicsDevice_SetConstantBuffer(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_Buffer* buffer);
 MG_EXPORT void MGG_GraphicsDevice_SetTexture(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_Texture* texture);
 MG_EXPORT void MGG_GraphicsDevice_SetSamplerState(MGG_GraphicsDevice* device, MGShaderStage stage, mgint slot, MGG_SamplerState* state);
@@ -83,6 +85,7 @@ MG_EXPORT void MGG_Buffer_SetData(MGG_GraphicsDevice* device, MGG_Buffer*& buffe
 MG_EXPORT void MGG_Buffer_GetData(MGG_GraphicsDevice* device, MGG_Buffer* buffer, mgint offset, mgbyte* data, mgint dataCount, mgint dataBytes, mgint dataStride);
 MG_EXPORT MGG_Texture* MGG_Texture_Create(MGG_GraphicsDevice* device, MGTextureType type, MGSurfaceFormat format, mgint width, mgint height, mgint depth, mgint mipmaps, mgint slices);
 MG_EXPORT MGG_Texture* MGG_RenderTarget_Create(MGG_GraphicsDevice* device, MGTextureType type, MGSurfaceFormat format, mgint width, mgint height, mgint depth, mgint mipmaps, mgint slices, MGDepthFormat depthFormat, mgint multiSampleCount, MGRenderTargetUsage usage);
+MG_EXPORT MGG_Texture* MGG_DepthStencilTarget_Create(MGG_GraphicsDevice* device, mgint width, mgint height, MGDepthFormat depthFormat);
 MG_EXPORT void MGG_Texture_Destroy(MGG_GraphicsDevice* device, MGG_Texture* texture);
 MG_EXPORT void MGG_Texture_SetData(MGG_GraphicsDevice* device, MGG_Texture* texture, mgint level, mgint slice, mgint x, mgint y, mgint z, mgint width, mgint height, mgint depth, mgbyte* data, mgint dataBytes);
 MG_EXPORT void MGG_Texture_GetData(MGG_GraphicsDevice* device, MGG_Texture* texture, mgint level, mgint slice, mgint x, mgint y, mgint z, mgint width, mgint height, mgint depth, mgbyte* data, mgint dataBytes);

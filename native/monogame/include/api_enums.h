@@ -80,6 +80,7 @@ enum class MGDepthFormat : mgint
     Depth16 = 1,
     Depth24 = 2,
     Depth24Stencil8 = 3,
+    Depth32Float = 4,
 };
 
 enum class MGPresentationSurfaceKind : mgint
@@ -120,6 +121,7 @@ enum class MGNativeGraphicsFeatures : mguint
     None = 0,
     AnisotropicFiltering = 1,
     CompletedGpuFrameTiming = 2,
+    ExplicitRenderPass = 4,
 };
 
 enum class MGClearOptions : mgint
@@ -127,6 +129,19 @@ enum class MGClearOptions : mgint
     Target = 1,
     DepthBuffer = 2,
     Stencil = 4,
+};
+
+enum class MGRenderPassLoadAction : mgint
+{
+    Load = 0,
+    Clear = 1,
+    DontCare = 2,
+};
+
+enum class MGRenderPassStoreAction : mgint
+{
+    Store = 0,
+    DontCare = 1,
 };
 
 enum class MGShaderStage : mgint

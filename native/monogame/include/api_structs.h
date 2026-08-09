@@ -162,6 +162,26 @@ struct MGG_GpuFrameTiming
     mgulong DroppedTimingCount;
 };
 
+struct MGG_RenderPassColorAttachment
+{
+    void* Target;
+    mgint ArraySlice;
+    MGRenderPassLoadAction LoadAction;
+    MGRenderPassStoreAction StoreAction;
+    Vector4 ClearColor;
+};
+
+struct MGG_RenderPassDepthStencilAttachment
+{
+    void* Target;
+    MGRenderPassLoadAction DepthLoadAction;
+    MGRenderPassStoreAction DepthStoreAction;
+    MGRenderPassLoadAction StencilLoadAction;
+    MGRenderPassStoreAction StencilStoreAction;
+    mgfloat ClearDepth;
+    mgint ClearStencil;
+};
+
 struct MGG_BlendState_Info
 {
     MGBlend colorSourceBlend;

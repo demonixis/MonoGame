@@ -164,6 +164,7 @@ struct MGG_Texture
     int mipmaps = 0;
     int slices = 0;
     int sampleCount = 1;
+    bool independentDepthStencil = false;
 };
 
 struct MGG_Shader
@@ -294,6 +295,7 @@ struct MGG_GraphicsDevice
     __strong id<MTLTexture> backBufferDepth = nil;
     __strong id<MTLRenderPipelineState> pipeline = nil;
     __strong id<MTLCommandBuffer> lastSubmitted = nil;
+    __strong MTLRenderPassDescriptor* renderPassDescriptor = nil;
     dispatch_semaphore_t inFlight = nullptr;
 #if defined(MG_SDL2)
     SDL_MetalView metalView = nullptr;
@@ -308,6 +310,10 @@ struct MGG_GraphicsDevice
     MGG_Texture* renderTargets[MGMetalMaxColorTargets] = {};
     int renderTargetSlices[MGMetalMaxColorTargets] = {};
     int renderTargetCount = 0;
+    bool explicitRenderPass = false;
+    MGG_RenderPassColorAttachment explicitColorAttachments[MGMetalMaxColorTargets] = {};
+    MGG_RenderPassDepthStencilAttachment explicitDepthStencilAttachment = {};
+    bool hasExplicitDepthStencilAttachment = false;
     MGG_Shader* vertexShader = nullptr;
     MGG_Shader* pixelShader = nullptr;
     MGG_InputLayout* inputLayout = nullptr;
@@ -393,8 +399,52 @@ static MTLPixelFormat MGMetalDepthFormat(MGDepthFormat format)
         case MGDepthFormat::Depth16: return MTLPixelFormatDepth16Unorm;
         case MGDepthFormat::Depth24: return MTLPixelFormatDepth32Float;
         case MGDepthFormat::Depth24Stencil8: return MTLPixelFormatDepth32Float_Stencil8;
+        case MGDepthFormat::Depth32Float: return MTLPixelFormatDepth32Float;
         default: return MTLPixelFormatInvalid;
     }
+}
+
+static bool MGMetalSupportsSampleableDepthSemantic(MGDepthFormat format)
+{
+    // Metal has no exact 24-bit depth-only texture format. Keep the legacy
+    // Depth24 promotion isolated from the explicit v3 contract. The
+    // Depth24Stencil8 semantic retains stencil and may use higher depth
+    // precision, matching Metal's only portable packed depth/stencil format.
+    return format == MGDepthFormat::Depth16 ||
+        format == MGDepthFormat::Depth24Stencil8 ||
+        format == MGDepthFormat::Depth32Float;
+}
+
+static MTLLoadAction MGMetalLoadAction(MGRenderPassLoadAction action)
+{
+    switch (action)
+    {
+        case MGRenderPassLoadAction::Load: return MTLLoadActionLoad;
+        case MGRenderPassLoadAction::Clear: return MTLLoadActionClear;
+        default: return MTLLoadActionDontCare;
+    }
+}
+
+static MTLStoreAction MGMetalStoreAction(MGRenderPassStoreAction action)
+{
+    return action == MGRenderPassStoreAction::Store
+        ? MTLStoreActionStore
+        : MTLStoreActionDontCare;
+}
+
+static MTLColorWriteMask MGMetalColorWriteMask(MGColorWriteChannels channels)
+{
+    const mgint bits = static_cast<mgint>(channels);
+    MTLColorWriteMask mask = MTLColorWriteMaskNone;
+    if ((bits & static_cast<mgint>(MGColorWriteChannels::Red)) != 0)
+        mask |= MTLColorWriteMaskRed;
+    if ((bits & static_cast<mgint>(MGColorWriteChannels::Green)) != 0)
+        mask |= MTLColorWriteMaskGreen;
+    if ((bits & static_cast<mgint>(MGColorWriteChannels::Blue)) != 0)
+        mask |= MTLColorWriteMaskBlue;
+    if ((bits & static_cast<mgint>(MGColorWriteChannels::Alpha)) != 0)
+        mask |= MTLColorWriteMaskAlpha;
+    return mask;
 }
 
 static MTLCompareFunction MGMetalCompare(MGCompareFunction function)
@@ -635,7 +685,8 @@ static id<MTLTexture> MGMetalCreateDepthTexture(
     int height,
     MGDepthFormat format,
     int sampleCount,
-    int slices = 1)
+    int slices = 1,
+    bool sampleable = false)
 {
     MTLPixelFormat pixelFormat = MGMetalDepthFormat(format);
     if (pixelFormat == MTLPixelFormatInvalid)
@@ -652,8 +703,27 @@ static id<MTLTexture> MGMetalCreateDepthTexture(
     descriptor.sampleCount = std::max(sampleCount, 1);
     descriptor.arrayLength = std::max(slices, 1);
     descriptor.storageMode = MTLStorageModePrivate;
-    descriptor.usage = MTLTextureUsageRenderTarget;
+    descriptor.usage = MTLTextureUsageRenderTarget |
+        (sampleable ? MTLTextureUsageShaderRead : (MTLTextureUsage)0);
     return [device newTextureWithDescriptor:descriptor];
+}
+
+static bool MGMetalSupportsSampleableDepthFormat(
+    id<MTLDevice> device,
+    MGDepthFormat format)
+{
+    if (device == nil || !MGMetalSupportsSampleableDepthSemantic(format))
+        return false;
+
+    id<MTLTexture> probe = MGMetalCreateDepthTexture(
+        device,
+        1,
+        1,
+        format,
+        1,
+        1,
+        true);
+    return probe != nil;
 }
 
 static MTLRenderPassDescriptor* MGMetalCreateRenderPass(
@@ -663,7 +733,36 @@ static MTLRenderPassDescriptor* MGMetalCreateRenderPass(
     float clearDepth,
     int clearStencil)
 {
-    MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
+    if (device->renderPassDescriptor == nil)
+        device->renderPassDescriptor = [MTLRenderPassDescriptor new];
+    MTLRenderPassDescriptor* pass = device->renderPassDescriptor;
+    for (int index = 0; index < MGMetalMaxColorTargets; ++index)
+    {
+        MTLRenderPassColorAttachmentDescriptor* color = pass.colorAttachments[index];
+        color.texture = nil;
+        color.resolveTexture = nil;
+        color.level = 0;
+        color.slice = 0;
+        color.depthPlane = 0;
+        color.resolveLevel = 0;
+        color.resolveSlice = 0;
+        color.loadAction = MTLLoadActionDontCare;
+        color.storeAction = MTLStoreActionDontCare;
+    }
+    pass.depthAttachment.texture = nil;
+    pass.depthAttachment.level = 0;
+    pass.depthAttachment.slice = 0;
+    pass.depthAttachment.depthPlane = 0;
+    pass.depthAttachment.loadAction = MTLLoadActionDontCare;
+    pass.depthAttachment.storeAction = MTLStoreActionDontCare;
+    pass.depthAttachment.clearDepth = 1.0;
+    pass.stencilAttachment.texture = nil;
+    pass.stencilAttachment.level = 0;
+    pass.stencilAttachment.slice = 0;
+    pass.stencilAttachment.depthPlane = 0;
+    pass.stencilAttachment.loadAction = MTLLoadActionDontCare;
+    pass.stencilAttachment.storeAction = MTLStoreActionDontCare;
+    pass.stencilAttachment.clearStencil = 0;
     const bool clearTarget = (((int)clearOptions & (int)MGClearOptions::Target) != 0);
 
     if (device->renderTargetCount == 0)
@@ -721,28 +820,70 @@ static MTLRenderPassDescriptor* MGMetalCreateRenderPass(
             {
                 color.texture = target->texture;
                 color.slice = slice;
-                color.storeAction = MTLStoreActionStore;
+                color.storeAction = device->explicitRenderPass
+                    ? MGMetalStoreAction(device->explicitColorAttachments[i].StoreAction)
+                    : MTLStoreActionStore;
             }
-            color.loadAction = clearTarget ? MTLLoadActionClear : MTLLoadActionLoad;
-            color.clearColor = MTLClearColorMake(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
+            if (device->explicitRenderPass)
+            {
+                const auto& attachment = device->explicitColorAttachments[i];
+                color.loadAction = MGMetalLoadAction(attachment.LoadAction);
+                color.clearColor = MTLClearColorMake(
+                    attachment.ClearColor.X,
+                    attachment.ClearColor.Y,
+                    attachment.ClearColor.Z,
+                    attachment.ClearColor.W);
+            }
+            else
+            {
+                color.loadAction = clearTarget ? MTLLoadActionClear : MTLLoadActionLoad;
+                color.clearColor = MTLClearColorMake(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
+            }
         }
 
-        MGG_Texture* first = device->renderTargets[0];
-        if (first->depthTexture != nil)
+        MGG_Texture* depthTarget = device->hasExplicitDepthStencilAttachment
+            ? static_cast<MGG_Texture*>(device->explicitDepthStencilAttachment.Target)
+            : device->renderTargets[0];
+        id<MTLTexture> depthTexture = device->hasExplicitDepthStencilAttachment
+            ? depthTarget->texture
+            : depthTarget->depthTexture;
+        if (depthTexture != nil)
         {
-            const NSUInteger depthSlice = (NSUInteger)std::max(device->renderTargetSlices[0], 0);
-            pass.depthAttachment.texture = first->depthTexture;
+            const NSUInteger depthSlice = device->hasExplicitDepthStencilAttachment
+                ? 0
+                : (NSUInteger)std::max(device->renderTargetSlices[0], 0);
+            pass.depthAttachment.texture = depthTexture;
             pass.depthAttachment.slice = depthSlice;
-            pass.depthAttachment.loadAction = (((int)clearOptions & (int)MGClearOptions::DepthBuffer) != 0) ? MTLLoadActionClear : MTLLoadActionLoad;
-            pass.depthAttachment.storeAction = MTLStoreActionStore;
-            pass.depthAttachment.clearDepth = clearDepth;
-            if (first->depthTexture.pixelFormat == MTLPixelFormatDepth32Float_Stencil8)
+            if (device->hasExplicitDepthStencilAttachment)
             {
-                pass.stencilAttachment.texture = first->depthTexture;
+                const auto& attachment = device->explicitDepthStencilAttachment;
+                pass.depthAttachment.loadAction = MGMetalLoadAction(attachment.DepthLoadAction);
+                pass.depthAttachment.storeAction = MGMetalStoreAction(attachment.DepthStoreAction);
+                pass.depthAttachment.clearDepth = attachment.ClearDepth;
+            }
+            else
+            {
+                pass.depthAttachment.loadAction = (((int)clearOptions & (int)MGClearOptions::DepthBuffer) != 0) ? MTLLoadActionClear : MTLLoadActionLoad;
+                pass.depthAttachment.storeAction = MTLStoreActionStore;
+                pass.depthAttachment.clearDepth = clearDepth;
+            }
+            if (depthTexture.pixelFormat == MTLPixelFormatDepth32Float_Stencil8)
+            {
+                pass.stencilAttachment.texture = depthTexture;
                 pass.stencilAttachment.slice = depthSlice;
-                pass.stencilAttachment.loadAction = (((int)clearOptions & (int)MGClearOptions::Stencil) != 0) ? MTLLoadActionClear : MTLLoadActionLoad;
-                pass.stencilAttachment.storeAction = MTLStoreActionStore;
-                pass.stencilAttachment.clearStencil = clearStencil;
+                if (device->hasExplicitDepthStencilAttachment)
+                {
+                    const auto& attachment = device->explicitDepthStencilAttachment;
+                    pass.stencilAttachment.loadAction = MGMetalLoadAction(attachment.StencilLoadAction);
+                    pass.stencilAttachment.storeAction = MGMetalStoreAction(attachment.StencilStoreAction);
+                    pass.stencilAttachment.clearStencil = attachment.ClearStencil;
+                }
+                else
+                {
+                    pass.stencilAttachment.loadAction = (((int)clearOptions & (int)MGClearOptions::Stencil) != 0) ? MTLLoadActionClear : MTLLoadActionLoad;
+                    pass.stencilAttachment.storeAction = MTLStoreActionStore;
+                    pass.stencilAttachment.clearStencil = clearStencil;
+                }
             }
         }
     }
@@ -783,6 +924,8 @@ static MTLPixelFormat MGMetalCurrentDepthFormat(MGG_GraphicsDevice* device)
 {
     if (device->renderTargetCount == 0)
         return device->backBufferDepth == nil ? MTLPixelFormatInvalid : device->backBufferDepth.pixelFormat;
+    if (device->hasExplicitDepthStencilAttachment)
+        return static_cast<MGG_Texture*>(device->explicitDepthStencilAttachment.Target)->texture.pixelFormat;
     MGG_Texture* first = device->renderTargets[0];
     return first->depthTexture == nil ? MTLPixelFormatInvalid : first->depthTexture.pixelFormat;
 }
@@ -1006,7 +1149,7 @@ static bool MGMetalUpdatePipeline(MGG_GraphicsDevice* device)
         color.sourceAlphaBlendFactor = MGMetalBlend(info.alphaSourceBlend);
         color.destinationAlphaBlendFactor = MGMetalBlend(info.alphaDestBlend);
         color.alphaBlendOperation = MGMetalBlendOperation(info.alphaBlendFunc);
-        color.writeMask = (MTLColorWriteMask)info.colorWriteChannels;
+        color.writeMask = MGMetalColorWriteMask(info.colorWriteChannels);
     }
 
     NSError* error = nil;
@@ -1302,7 +1445,7 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
     MGG_GraphicsDevice_GetCaps(device, legacy);
     MGG_GraphicsDevice_CapsV2 value{};
     value.StructSize = sizeof(value);
-    value.AbiVersion = 2;
+    value.AbiVersion = 3;
     value.ApiMajor = 3;
     value.ApiMinor = 0;
     value.MaxTextureSlots = legacy.MaxTextureSlots;
@@ -1314,6 +1457,14 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_GetCapsV2(
     value.Features = static_cast<MGNativeGraphicsFeatures>(
         static_cast<mguint>(MGNativeGraphicsFeatures::AnisotropicFiltering) |
         static_cast<mguint>(MGNativeGraphicsFeatures::CompletedGpuFrameTiming));
+    if (MGMetalSupportsSampleableDepthFormat(device->device, MGDepthFormat::Depth32Float) ||
+        MGMetalSupportsSampleableDepthFormat(device->device, MGDepthFormat::Depth24Stencil8) ||
+        MGMetalSupportsSampleableDepthFormat(device->device, MGDepthFormat::Depth16))
+    {
+        value.Features = static_cast<MGNativeGraphicsFeatures>(
+            static_cast<mguint>(value.Features) |
+            static_cast<mguint>(MGNativeGraphicsFeatures::ExplicitRenderPass));
+    }
     value.MaxAnisotropy = 16.0f;
     value.MaxRenderTargets = static_cast<mgint>(MGMetalMaxColorTargets);
     value.MaxDrawBuffers = static_cast<mgint>(MGMetalMaxColorTargets);
@@ -1588,6 +1739,10 @@ void MGG_GraphicsDevice_SetRenderTargets(MGG_GraphicsDevice* device, MGG_Texture
     memset(device->renderTargets, 0, sizeof(device->renderTargets));
     memset(device->renderTargetSlices, 0, sizeof(device->renderTargetSlices));
     device->renderTargetCount = 0;
+    device->explicitRenderPass = false;
+    device->hasExplicitDepthStencilAttachment = false;
+    memset(device->explicitColorAttachments, 0, sizeof(device->explicitColorAttachments));
+    device->explicitDepthStencilAttachment = {};
     const int requestedCount = targets == nullptr ? 0 :
         std::min(std::max(count, 0), (mgint)MGMetalMaxColorTargets);
     for (int i = 0; i < requestedCount; ++i)
@@ -1619,6 +1774,97 @@ MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderTargetsV2(
             return MGGraphicsDeviceStatus::InvalidRenderTarget;
     }
     MGG_GraphicsDevice_SetRenderTargets(device, targets, arraySlices, count);
+    return MGGraphicsDeviceStatus::Success;
+}
+
+mgbyte MGG_GraphicsDevice_SupportsDepthStencilTargetFormatV3(
+    MGG_GraphicsDevice* device,
+    MGDepthFormat depthFormat)
+{
+    return device != nullptr && device->device != nil &&
+        MGMetalSupportsSampleableDepthFormat(device->device, depthFormat)
+        ? 1
+        : 0;
+}
+
+MGGraphicsDeviceStatus MGG_GraphicsDevice_SetRenderPassV3(
+    MGG_GraphicsDevice* device,
+    MGG_RenderPassColorAttachment* colorAttachments,
+    mgint colorAttachmentCount,
+    MGG_RenderPassDepthStencilAttachment* depthStencilAttachment)
+{
+    if (device == nullptr)
+        return MGGraphicsDeviceStatus::InvalidArgument;
+    if (colorAttachmentCount <= 0 || colorAttachmentCount > static_cast<mgint>(MGMetalMaxColorTargets))
+        return MGGraphicsDeviceStatus::InvalidRenderTargetCount;
+    if (colorAttachments == nullptr)
+        return MGGraphicsDeviceStatus::InvalidArgument;
+
+    int width = 0;
+    int height = 0;
+    for (mgint index = 0; index < colorAttachmentCount; ++index)
+    {
+        const auto& attachment = colorAttachments[index];
+        MGG_Texture* target = static_cast<MGG_Texture*>(attachment.Target);
+        if (target == nullptr || target->texture == nil || target->independentDepthStencil)
+            return MGGraphicsDeviceStatus::InvalidRenderTarget;
+        if (target->sampleCount > 1)
+            return MGGraphicsDeviceStatus::RenderTargetMultisamplingNotSupported;
+        if (attachment.ArraySlice < 0 || attachment.ArraySlice >= std::max(target->slices, 1))
+            return MGGraphicsDeviceStatus::InvalidRenderTarget;
+        if (attachment.LoadAction < MGRenderPassLoadAction::Load ||
+            attachment.LoadAction > MGRenderPassLoadAction::DontCare ||
+            attachment.StoreAction < MGRenderPassStoreAction::Store ||
+            attachment.StoreAction > MGRenderPassStoreAction::DontCare)
+            return MGGraphicsDeviceStatus::InvalidArgument;
+        if (index == 0)
+        {
+            width = target->width;
+            height = target->height;
+        }
+        else if (target->width != width || target->height != height)
+        {
+            return MGGraphicsDeviceStatus::RenderTargetDimensionsMismatch;
+        }
+    }
+
+    if (depthStencilAttachment != nullptr)
+    {
+        MGG_Texture* target = static_cast<MGG_Texture*>(depthStencilAttachment->Target);
+        if (target == nullptr || target->texture == nil || !target->independentDepthStencil)
+            return MGGraphicsDeviceStatus::InvalidRenderTarget;
+        if (target->sampleCount > 1)
+            return MGGraphicsDeviceStatus::RenderTargetMultisamplingNotSupported;
+        if (target->width != width || target->height != height)
+            return MGGraphicsDeviceStatus::RenderTargetDimensionsMismatch;
+        if (depthStencilAttachment->DepthLoadAction < MGRenderPassLoadAction::Load ||
+            depthStencilAttachment->DepthLoadAction > MGRenderPassLoadAction::DontCare ||
+            depthStencilAttachment->StencilLoadAction < MGRenderPassLoadAction::Load ||
+            depthStencilAttachment->StencilLoadAction > MGRenderPassLoadAction::DontCare ||
+            depthStencilAttachment->DepthStoreAction < MGRenderPassStoreAction::Store ||
+            depthStencilAttachment->DepthStoreAction > MGRenderPassStoreAction::DontCare ||
+            depthStencilAttachment->StencilStoreAction < MGRenderPassStoreAction::Store ||
+            depthStencilAttachment->StencilStoreAction > MGRenderPassStoreAction::DontCare)
+            return MGGraphicsDeviceStatus::InvalidArgument;
+    }
+
+    MGMetalEndEncoder(device);
+    memset(device->renderTargets, 0, sizeof(device->renderTargets));
+    memset(device->renderTargetSlices, 0, sizeof(device->renderTargetSlices));
+    memset(device->explicitColorAttachments, 0, sizeof(device->explicitColorAttachments));
+    for (mgint index = 0; index < colorAttachmentCount; ++index)
+    {
+        device->renderTargets[index] = static_cast<MGG_Texture*>(colorAttachments[index].Target);
+        device->renderTargetSlices[index] = colorAttachments[index].ArraySlice;
+        device->explicitColorAttachments[index] = colorAttachments[index];
+    }
+    device->renderTargetCount = colorAttachmentCount;
+    device->explicitRenderPass = true;
+    device->hasExplicitDepthStencilAttachment = depthStencilAttachment != nullptr;
+    device->explicitDepthStencilAttachment = depthStencilAttachment != nullptr
+        ? *depthStencilAttachment
+        : MGG_RenderPassDepthStencilAttachment{};
+    device->pipelineDirty = true;
     return MGGraphicsDeviceStatus::Success;
 }
 
@@ -2112,6 +2358,42 @@ MGG_Texture* MGG_RenderTarget_Create(MGG_GraphicsDevice* device, MGTextureType t
         texture->multisampleTexture = [device->device newTextureWithDescriptor:descriptor];
     }
     texture->depthTexture = MGMetalCreateDepthTexture(device->device, width, height, depthFormat, texture->sampleCount, slices);
+    return texture;
+}
+
+MGG_Texture* MGG_DepthStencilTarget_Create(
+    MGG_GraphicsDevice* device,
+    mgint width,
+    mgint height,
+    MGDepthFormat depthFormat)
+{
+    if (device == nullptr || device->device == nil || width <= 0 || height <= 0 ||
+        !MGMetalSupportsSampleableDepthSemantic(depthFormat))
+        return nullptr;
+
+    auto texture = new MGG_Texture();
+    texture->type = MGTextureType::_2D;
+    texture->depthFormat = depthFormat;
+    texture->width = width;
+    texture->height = height;
+    texture->depth = 1;
+    texture->mipmaps = 1;
+    texture->slices = 1;
+    texture->sampleCount = 1;
+    texture->independentDepthStencil = true;
+    texture->texture = MGMetalCreateDepthTexture(
+        device->device,
+        width,
+        height,
+        depthFormat,
+        1,
+        1,
+        true);
+    if (texture->texture == nil)
+    {
+        delete texture;
+        return nullptr;
+    }
     return texture;
 }
 

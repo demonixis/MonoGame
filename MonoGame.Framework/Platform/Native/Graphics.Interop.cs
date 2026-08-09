@@ -87,6 +87,28 @@ internal struct MGG_GraphicsDevice_CapsV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct MGG_RenderPassColorAttachment
+{
+    public nint Target;
+    public int ArraySlice;
+    public RenderPassLoadAction LoadAction;
+    public RenderPassStoreAction StoreAction;
+    public Vector4 ClearColor;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct MGG_RenderPassDepthStencilAttachment
+{
+    public nint Target;
+    public RenderPassLoadAction DepthLoadAction;
+    public RenderPassStoreAction DepthStoreAction;
+    public RenderPassLoadAction StencilLoadAction;
+    public RenderPassStoreAction StencilStoreAction;
+    public float ClearDepth;
+    public int ClearStencil;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct MGG_GpuFrameTiming
 {
     public ulong SubmissionId;
@@ -129,6 +151,7 @@ internal enum NativeGraphicsFeatures : uint
     None = 0,
     AnisotropicFiltering = 1 << 0,
     CompletedGpuFrameTiming = 1 << 1,
+    ExplicitRenderPass = 1 << 2,
 }
 
 internal enum GraphicsDeviceStatus
@@ -424,6 +447,18 @@ internal static unsafe partial class MGG
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SetRenderTargetsV2", ExactSpelling = true)]
     public static extern GraphicsDeviceStatus GraphicsDevice_SetRenderTargetsV2(MGG_GraphicsDevice* device, MGG_Texture** targets, int* arraySlices, int count);
 
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SetRenderPassV3", ExactSpelling = true)]
+    public static extern GraphicsDeviceStatus GraphicsDevice_SetRenderPassV3(
+        MGG_GraphicsDevice* device,
+        MGG_RenderPassColorAttachment* colorAttachments,
+        int colorAttachmentCount,
+        MGG_RenderPassDepthStencilAttachment* depthStencilAttachment);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SupportsDepthStencilTargetFormatV3", ExactSpelling = true)]
+    public static extern byte GraphicsDevice_SupportsDepthStencilTargetFormatV3(
+        MGG_GraphicsDevice* device,
+        DepthFormat depthFormat);
+
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_GraphicsDevice_SetConstantBuffer", ExactSpelling = true)]
     public static extern void GraphicsDevice_SetConstantBuffer(MGG_GraphicsDevice* device, ShaderStage stage, int slot, MGG_Buffer* buffer);
 
@@ -547,6 +582,13 @@ internal static unsafe partial class MGG
         DepthFormat depthFormat,
         int multiSampleCount,
         RenderTargetUsage usage);
+
+    [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_DepthStencilTarget_Create", ExactSpelling = true)]
+    public static extern MGG_Texture* DepthStencilTarget_Create(
+        MGG_GraphicsDevice* device,
+        int width,
+        int height,
+        DepthFormat depthFormat);
 
     [DllImport(MGP.MonoGameNativeDLL, EntryPoint = "MGG_Texture_Destroy", ExactSpelling = true)]
     public static extern void Texture_Destroy(MGG_GraphicsDevice* device, MGG_Texture* texture);

@@ -60,7 +60,7 @@ namespace MonoGame.Tests.Graphics
             Assert.AreEqual(
                 MonoGame.Interop.GraphicsDeviceStatus.InsufficientSize,
                 MGG.GraphicsDevice_GetCapsV2(gd.Handle, ref undersizedCaps, undersizedCaps.StructSize));
-            Assert.AreEqual(2u, caps.AbiVersion);
+            Assert.AreEqual(3u, caps.AbiVersion);
             Assert.AreEqual(4, caps.ApiMajor);
             Assert.GreaterOrEqual(caps.ApiMinor, 1);
             Assert.AreEqual(84, caps.ShaderProfile);
@@ -68,6 +68,12 @@ namespace MonoGame.Tests.Graphics
             Assert.GreaterOrEqual(caps.MaxRenderTargets, 4);
             Assert.GreaterOrEqual(caps.MaxDrawBuffers, 4);
             Assert.GreaterOrEqual(caps.MaxColorAttachments, 4);
+            Assert.IsTrue(caps.Features.HasFlag(NativeGraphicsFeatures.ExplicitRenderPass));
+            Assert.IsTrue(gd.SupportsExplicitRenderPass);
+            Assert.IsFalse(gd.SupportsDepthStencilTargetFormat(DepthFormat.None));
+            Assert.IsTrue(
+                gd.SupportsDepthStencilTargetFormat(DepthFormat.Depth32Float) ||
+                gd.SupportsDepthStencilTargetFormat(DepthFormat.Depth24));
             Assert.IsFalse(gd.GraphicsCapabilities.SupportsSeparateBlendStates);
             Assert.IsTrue(gd.GraphicsCapabilities.SupportsBaseIndexInstancing);
             Assert.IsFalse(GraphicsCapabilities.SupportsBaseIndexInstancingForShaderProfile(82));
@@ -91,6 +97,125 @@ namespace MonoGame.Tests.Graphics
             {
                 var shader = MGG.Shader_Create(gd.Handle, ShaderStage.Vertex, payload, incompatiblePayload.Length);
                 Assert.AreEqual(IntPtr.Zero, (IntPtr)shader);
+            }
+        }
+
+        [Test]
+        public void ExplicitRenderPassSharesAndPreservesSampleableDepth()
+        {
+            var depthFormat = gd.SupportsDepthStencilTargetFormat(DepthFormat.Depth32Float)
+                ? DepthFormat.Depth32Float
+                : DepthFormat.Depth24;
+            Assert.IsTrue(gd.SupportsDepthStencilTargetFormat(depthFormat));
+
+            using var color = new RenderTarget2D(
+                gd,
+                16,
+                16,
+                false,
+                SurfaceFormat.Color,
+                DepthFormat.None);
+            using var depth = new DepthStencilTarget2D(gd, 16, 16, depthFormat);
+            using var mismatchedDepth = new DepthStencilTarget2D(gd, 8, 8, depthFormat);
+            using var effect = new BasicEffect(gd)
+            {
+                World = Matrix.Identity,
+                View = Matrix.Identity,
+                Projection = Matrix.Identity,
+                VertexColorEnabled = true,
+            };
+
+            Assert.IsInstanceOf<Texture2D>(depth);
+            Assert.AreEqual(depthFormat, depth.DepthStencilFormat);
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new DepthStencilTarget2D(gd, 1, 1, DepthFormat.None));
+
+            var colors = new[]
+            {
+                new RenderPassColorAttachment(
+                    color,
+                    RenderPassLoadAction.Clear,
+                    RenderPassStoreAction.Store,
+                    Color.Red.ToVector4()),
+            };
+            var depthAttachment = new RenderPassDepthStencilAttachment(
+                depth,
+                RenderPassLoadAction.Clear,
+                RenderPassStoreAction.Store,
+                RenderPassLoadAction.DontCare,
+                RenderPassStoreAction.DontCare,
+                0.25f);
+            var vertices = new[]
+            {
+                new VertexPositionColor(new Vector3(-1, -1, 0.5f), Color.Red),
+                new VertexPositionColor(new Vector3(-1,  3, 0.5f), Color.Red),
+                new VertexPositionColor(new Vector3( 3, -1, 0.5f), Color.Red),
+            };
+
+            gd.BlendState = BlendState.Opaque;
+            gd.RasterizerState = RasterizerState.CullNone;
+            gd.DepthStencilState = DepthStencilState.None;
+            gd.SetRenderPass(colors, in depthAttachment);
+            DrawExplicitDepthTriangle(effect, vertices);
+            for (var index = 0; index < vertices.Length; ++index)
+                vertices[index].Color = Color.Blue;
+
+            colors[0] = new RenderPassColorAttachment(
+                color,
+                RenderPassLoadAction.Load,
+                RenderPassStoreAction.Store,
+                Vector4.Zero);
+            depthAttachment = new RenderPassDepthStencilAttachment(
+                depth,
+                RenderPassLoadAction.Load,
+                RenderPassStoreAction.Store,
+                RenderPassLoadAction.DontCare,
+                RenderPassStoreAction.DontCare);
+            gd.DepthStencilState = DepthStencilState.Default;
+            gd.SetRenderPass(colors, in depthAttachment);
+            DrawExplicitDepthTriangle(effect, vertices);
+            gd.SetRenderTarget(null);
+
+            var pixel = new Color[1];
+            color.GetData(0, new Rectangle(8, 8, 1, 1), pixel, 0, 1);
+            Assert.AreEqual(Color.Red, pixel[0], "The second pass must load the stored 0.25 depth and reject z=0.5.");
+
+            depthAttachment = new RenderPassDepthStencilAttachment(
+                depth,
+                RenderPassLoadAction.Clear,
+                RenderPassStoreAction.Store,
+                RenderPassLoadAction.DontCare,
+                RenderPassStoreAction.DontCare,
+                1.0f);
+            gd.SetRenderPass(colors, in depthAttachment);
+            DrawExplicitDepthTriangle(effect, vertices);
+            gd.SetRenderTarget(null);
+
+            color.GetData(0, new Rectangle(8, 8, 1, 1), pixel, 0, 1);
+            Assert.AreEqual(Color.Blue, pixel[0], "Clearing shared depth to one must admit z=0.5.");
+
+            var wrongDepth = new RenderPassDepthStencilAttachment(
+                mismatchedDepth,
+                RenderPassLoadAction.Clear,
+                RenderPassStoreAction.Store,
+                RenderPassLoadAction.DontCare,
+                RenderPassStoreAction.DontCare);
+            Assert.Throws<ArgumentException>(() => gd.SetRenderPass(colors, in wrongDepth));
+
+            colors[0] = new RenderPassColorAttachment(
+                color,
+                (RenderPassLoadAction)99,
+                RenderPassStoreAction.Store,
+                Vector4.Zero);
+            Assert.Throws<ArgumentOutOfRangeException>(() => gd.SetRenderPass(colors));
+        }
+
+        private void DrawExplicitDepthTriangle(BasicEffect effect, VertexPositionColor[] vertices)
+        {
+            foreach (var pass in effect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                gd.DrawUserPrimitives(PrimitiveType.TriangleList, vertices, 0, 1);
             }
         }
 

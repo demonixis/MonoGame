@@ -26,6 +26,9 @@ public partial class GraphicsDevice
 
     private unsafe readonly MGG_Texture*[] _curRenderTargets = new MGG_Texture*[4];
     private readonly int[] _currentRenderTargetArraySlices = new int[4];
+    private readonly MGG_RenderPassColorAttachment[] _nativeRenderPassColorAttachments = new MGG_RenderPassColorAttachment[4];
+    private bool _explicitRenderPassActive;
+    private DepthFormat _explicitDepthFormat = DepthFormat.None;
 
     internal static int ShaderProfile
     {
@@ -52,6 +55,29 @@ public partial class GraphicsDevice
     internal int NativeMaxDrawBuffers { get; private set; } = 1;
 
     internal int NativeMaxColorAttachments { get; private set; } = 1;
+
+    /// <summary>
+    /// Gets whether the native graphics backend supports explicit render passes with a
+    /// separate sampleable depth/stencil attachment.
+    /// </summary>
+    public bool SupportsExplicitRenderPass =>
+        NativeCapabilitiesAbiVersion >= 3 &&
+        (NativeFeatures & NativeGraphicsFeatures.ExplicitRenderPass) != 0;
+
+    /// <summary>
+    /// Gets whether a compatible sampleable independent depth/stencil format is supported.
+    /// </summary>
+    /// <remarks>
+    /// This method never reduces the requested depth precision or adds or removes stencil.
+    /// A backend may use greater depth precision for a packed depth/stencil request.
+    /// </remarks>
+    public unsafe bool SupportsDepthStencilTargetFormat(DepthFormat depthFormat)
+    {
+        if (!SupportsExplicitRenderPass || depthFormat == DepthFormat.None)
+            return false;
+
+        return MGG.GraphicsDevice_SupportsDepthStencilTargetFormatV3(Handle, depthFormat) != 0;
+    }
 
     private void PlatformValidateRenderTargets(RenderTargetBinding[] renderTargets)
     {
@@ -400,6 +426,9 @@ public partial class GraphicsDevice
     {
         BeginFrame();
 
+        _explicitRenderPassActive = false;
+        _explicitDepthFormat = DepthFormat.None;
+
         _viewport = new Viewport(
             0,
             0,
@@ -426,6 +455,9 @@ public partial class GraphicsDevice
     {
         BeginFrame();
 
+        _explicitRenderPassActive = false;
+        _explicitDepthFormat = DepthFormat.None;
+
         Array.Clear(_curRenderTargets, 0, 4);
 
         IRenderTarget first = null;
@@ -445,6 +477,160 @@ public partial class GraphicsDevice
             SetNativeRenderTargets(targets, arraySlices, _currentRenderTargetCount);
         
         return first;
+    }
+
+    /// <summary>
+    /// Begins an explicit native render pass with color attachments and no depth/stencil attachment.
+    /// </summary>
+    /// <remarks>
+    /// Reuse the attachment array across frames to keep this call allocation-free.
+    /// </remarks>
+    public void SetRenderPass(RenderPassColorAttachment[] colorAttachments)
+    {
+        var unusedDepth = default(RenderPassDepthStencilAttachment);
+        SetRenderPassCore(colorAttachments, false, in unusedDepth);
+    }
+
+    /// <summary>
+    /// Begins an explicit native render pass with independent color and depth/stencil attachments.
+    /// </summary>
+    /// <remarks>
+    /// Reuse the attachment array across frames to keep this call allocation-free. The depth/stencil
+    /// target must not also be bound as a shader resource while this pass is active.
+    /// </remarks>
+    public void SetRenderPass(
+        RenderPassColorAttachment[] colorAttachments,
+        in RenderPassDepthStencilAttachment depthStencilAttachment)
+    {
+        SetRenderPassCore(colorAttachments, true, in depthStencilAttachment);
+    }
+
+    private unsafe void SetRenderPassCore(
+        RenderPassColorAttachment[] colorAttachments,
+        bool hasDepthStencilAttachment,
+        in RenderPassDepthStencilAttachment depthStencilAttachment)
+    {
+        if (!SupportsExplicitRenderPass)
+            throw new NotSupportedException("The active native graphics backend does not support explicit render passes.");
+        if (colorAttachments == null)
+            throw new ArgumentNullException(nameof(colorAttachments));
+        if (colorAttachments.Length == 0)
+            throw new ArgumentException("An explicit render pass requires at least one color attachment.", nameof(colorAttachments));
+
+        var maximum = Math.Min(_nativeRenderPassColorAttachments.Length, NativeMaxRenderTargets);
+        if (colorAttachments.Length > maximum)
+            throw new ArgumentException($"The native graphics backend supports at most {maximum} color attachments.", nameof(colorAttachments));
+
+        var width = 0;
+        var height = 0;
+        for (var index = 0; index < colorAttachments.Length; ++index)
+        {
+            ref readonly var attachment = ref colorAttachments[index];
+            ValidateRenderPassActions(attachment.LoadAction, attachment.StoreAction, nameof(colorAttachments));
+
+            var binding = attachment.Binding;
+            if (binding.RenderTarget is not RenderTarget2D target)
+                throw new NotSupportedException("Explicit native render passes currently support RenderTarget2D color attachments only.");
+            if (target.GraphicsDevice != this)
+                throw new ArgumentException("Every render-pass attachment must belong to this graphics device.", nameof(colorAttachments));
+            if (target.MultiSampleCount > 1)
+                throw new NotSupportedException("Explicit native render passes do not support multisampled color attachments.");
+            if (index == 0)
+            {
+                width = target.Width;
+                height = target.Height;
+            }
+            else if (target.Width != width || target.Height != height)
+            {
+                throw new ArgumentException("Every render-pass attachment must have identical dimensions.", nameof(colorAttachments));
+            }
+
+            _nativeRenderPassColorAttachments[index] = new MGG_RenderPassColorAttachment
+            {
+                Target = (nint)target.Handle,
+                ArraySlice = binding.ArraySlice,
+                LoadAction = attachment.LoadAction,
+                StoreAction = attachment.StoreAction,
+                ClearColor = attachment.ClearColor,
+            };
+        }
+
+        MGG_RenderPassDepthStencilAttachment nativeDepthStencilAttachment = default;
+        if (hasDepthStencilAttachment)
+        {
+            var target = depthStencilAttachment.Target;
+            if (target == null)
+                throw new ArgumentException("The depth/stencil attachment must contain a target.", nameof(depthStencilAttachment));
+            if (target.GraphicsDevice != this)
+                throw new ArgumentException("The depth/stencil attachment must belong to this graphics device.", nameof(depthStencilAttachment));
+            if (target.Width != width || target.Height != height)
+                throw new ArgumentException("The depth/stencil attachment must match the color attachment dimensions.", nameof(depthStencilAttachment));
+            if (depthStencilAttachment.ClearDepth < 0.0f || depthStencilAttachment.ClearDepth > 1.0f)
+                throw new ArgumentOutOfRangeException(nameof(depthStencilAttachment), "The depth clear value must be between zero and one.");
+            if (depthStencilAttachment.ClearStencil < 0 || depthStencilAttachment.ClearStencil > byte.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(depthStencilAttachment), "The stencil clear value must be between zero and 255.");
+
+            ValidateRenderPassActions(
+                depthStencilAttachment.DepthLoadAction,
+                depthStencilAttachment.DepthStoreAction,
+                nameof(depthStencilAttachment));
+            ValidateRenderPassActions(
+                depthStencilAttachment.StencilLoadAction,
+                depthStencilAttachment.StencilStoreAction,
+                nameof(depthStencilAttachment));
+
+            nativeDepthStencilAttachment = new MGG_RenderPassDepthStencilAttachment
+            {
+                Target = (nint)target.Handle,
+                DepthLoadAction = depthStencilAttachment.DepthLoadAction,
+                DepthStoreAction = depthStencilAttachment.DepthStoreAction,
+                StencilLoadAction = depthStencilAttachment.StencilLoadAction,
+                StencilStoreAction = depthStencilAttachment.StencilStoreAction,
+                ClearDepth = depthStencilAttachment.ClearDepth,
+                ClearStencil = depthStencilAttachment.ClearStencil,
+            };
+        }
+
+        PlatformResolveRenderTargets();
+        BeginFrame();
+
+        fixed (MGG_RenderPassColorAttachment* nativeColors = _nativeRenderPassColorAttachments)
+        {
+            var nativeDepth = hasDepthStencilAttachment ? &nativeDepthStencilAttachment : null;
+            var status = MGG.GraphicsDevice_SetRenderPassV3(
+                Handle,
+                nativeColors,
+                colorAttachments.Length,
+                nativeDepth);
+            ThrowForNativeRenderTargetStatus(status);
+        }
+
+        Array.Clear(_currentRenderTargetBindings, 0, _currentRenderTargetBindings.Length);
+        for (var index = 0; index < colorAttachments.Length; ++index)
+            _currentRenderTargetBindings[index] = colorAttachments[index].Binding;
+        _currentRenderTargetCount = colorAttachments.Length;
+        _explicitRenderPassActive = true;
+        _explicitDepthFormat = hasDepthStencilAttachment
+            ? depthStencilAttachment.Target.DepthStencilFormat
+            : DepthFormat.None;
+
+        Viewport = new Viewport(0, 0, width, height);
+        ScissorRectangle = new Rectangle(0, 0, width, height);
+        unchecked
+        {
+            _graphicsMetrics._targetCount += colorAttachments.Length;
+        }
+    }
+
+    private static void ValidateRenderPassActions(
+        RenderPassLoadAction loadAction,
+        RenderPassStoreAction storeAction,
+        string parameterName)
+    {
+        if (loadAction < RenderPassLoadAction.Load || loadAction > RenderPassLoadAction.DontCare)
+            throw new ArgumentOutOfRangeException(parameterName, $"Unknown render-pass load action {loadAction}.");
+        if (storeAction < RenderPassStoreAction.Store || storeAction > RenderPassStoreAction.DontCare)
+            throw new ArgumentOutOfRangeException(parameterName, $"Unknown render-pass store action {storeAction}.");
     }
 
     private unsafe void SetNativeRenderTargets(MGG_Texture** targets, int* arraySlices, int count)
