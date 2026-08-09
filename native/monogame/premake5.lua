@@ -205,7 +205,7 @@ function configs()
 
     filter "system:macosx"
     buildoptions {"-arch x86_64", "-arch arm64"}
-    linkoptions {"-arch x86_64", "-arch arm64"}
+    linkoptions {"-arch x86_64", "-arch arm64", "-Wl,-headerpad_max_install_names"}
     filter {}
 end
 
