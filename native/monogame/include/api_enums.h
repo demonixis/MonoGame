@@ -15,6 +15,7 @@ enum class MGSoundState : mgint
     Paused = 1,
     Stopped = 2,
 };
+
 enum class MGFilterMode : mgint
 {
     LowPass = 0,

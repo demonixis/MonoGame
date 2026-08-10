@@ -14,7 +14,8 @@ internal partial class GraphicsCapabilities
         var isNativeOpenGL = device.NativeCapabilitiesAbiVersion >= 2 &&
             (GraphicsDevice.ShaderProfile == 82 || GraphicsDevice.ShaderProfile == 84);
         SupportsNonPowerOfTwo = device.GraphicsProfile == GraphicsProfile.HiDef;
-        SupportsTextureFilterAnisotropic = device.NativeFeatures.HasFlag(NativeGraphicsFeatures.AnisotropicFiltering);
+        SupportsTextureFilterAnisotropic =
+            (device.NativeFeatures & NativeGraphicsFeatures.AnisotropicFiltering) != 0;
 
         SupportsDepth24 = true;
         SupportsPackedDepthStencil = true;

@@ -210,6 +210,52 @@ namespace MonoGame.Tests.Graphics
             Assert.Throws<ArgumentOutOfRangeException>(() => gd.SetRenderPass(colors));
         }
 
+        [Test]
+        public void RejectedExplicitRenderPassRestoresTheDefaultTarget()
+        {
+            var rejected = new RenderTarget2D(
+                gd,
+                8,
+                8,
+                false,
+                SurfaceFormat.Color,
+                DepthFormat.None);
+            var rejectedColors = new[]
+            {
+                new RenderPassColorAttachment(
+                    rejected,
+                    RenderPassLoadAction.Clear,
+                    RenderPassStoreAction.Store,
+                    Vector4.Zero),
+            };
+            rejected.Dispose();
+
+            Assert.Throws<ArgumentException>(() => gd.SetRenderPass(rejectedColors));
+            Assert.AreEqual(0, gd.RenderTargetCount);
+
+            using var valid = new RenderTarget2D(
+                gd,
+                8,
+                8,
+                false,
+                SurfaceFormat.Color,
+                DepthFormat.None);
+            var validColors = new[]
+            {
+                new RenderPassColorAttachment(
+                    valid,
+                    RenderPassLoadAction.Clear,
+                    RenderPassStoreAction.Store,
+                    Color.CornflowerBlue.ToVector4()),
+            };
+            Assert.DoesNotThrow(() => gd.SetRenderPass(validColors));
+            gd.SetRenderTarget(null);
+
+            var pixel = new Color[1];
+            valid.GetData(0, new Rectangle(4, 4, 1, 1), pixel, 0, 1);
+            Assert.AreEqual(Color.CornflowerBlue, pixel[0]);
+        }
+
         private void DrawExplicitDepthTriangle(BasicEffect effect, VertexPositionColor[] vertices)
         {
             foreach (var pass in effect.CurrentTechnique.Passes)

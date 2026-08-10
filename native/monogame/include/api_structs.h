@@ -34,6 +34,7 @@ struct ReverbSettings
     mgfloat RoomSizeFeet;
     mgfloat WetDryMixPct;
 };
+
 struct Vector3
 {
     mgfloat X;

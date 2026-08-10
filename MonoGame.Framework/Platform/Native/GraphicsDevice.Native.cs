@@ -602,6 +602,8 @@ public partial class GraphicsDevice
                 nativeColors,
                 colorAttachments.Length,
                 nativeDepth);
+            if (status != MonoGame.Interop.GraphicsDeviceStatus.Success)
+                ResetAfterFailedRenderPass();
             ThrowForNativeRenderTargetStatus(status);
         }
 
@@ -620,6 +622,35 @@ public partial class GraphicsDevice
         {
             _graphicsMetrics._targetCount += colorAttachments.Length;
         }
+    }
+
+    private unsafe void ResetAfterFailedRenderPass()
+    {
+        // Some APIs have to assemble and validate the framebuffer while binding it. If that
+        // validation fails, force both sides back to the default target before the caller releases
+        // or replaces any rejected attachment. Keep the original render-pass status authoritative.
+        try
+        {
+            SetNativeRenderTargets(null, null, 0);
+        }
+        catch
+        {
+        }
+
+        Array.Clear(_currentRenderTargetBindings, 0, _currentRenderTargetBindings.Length);
+        _currentRenderTargetCount = 0;
+        _explicitRenderPassActive = false;
+        _explicitDepthFormat = DepthFormat.None;
+        Viewport = new Viewport(
+            0,
+            0,
+            PresentationParameters.BackBufferWidth,
+            PresentationParameters.BackBufferHeight);
+        ScissorRectangle = new Rectangle(
+            0,
+            0,
+            PresentationParameters.BackBufferWidth,
+            PresentationParameters.BackBufferHeight);
     }
 
     private static void ValidateRenderPassActions(

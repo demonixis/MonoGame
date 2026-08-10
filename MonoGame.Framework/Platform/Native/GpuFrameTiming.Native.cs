@@ -37,7 +37,7 @@ public partial class GraphicsDevice
     /// Gets whether the selected native backend can report completed presentation GPU timings.
     /// </summary>
     public bool SupportsCompletedGpuFrameTiming =>
-        NativeFeatures.HasFlag(NativeGraphicsFeatures.CompletedGpuFrameTiming);
+        (NativeFeatures & NativeGraphicsFeatures.CompletedGpuFrameTiming) != 0;
 
     /// <summary>
     /// Attempts to dequeue one completed presentation GPU timing without blocking.

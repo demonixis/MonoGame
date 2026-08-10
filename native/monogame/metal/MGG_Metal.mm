@@ -841,11 +841,13 @@ static MTLRenderPassDescriptor* MGMetalCreateRenderPass(
             }
         }
 
-        MGG_Texture* depthTarget = device->hasExplicitDepthStencilAttachment
-            ? static_cast<MGG_Texture*>(device->explicitDepthStencilAttachment.Target)
+        MGG_Texture* depthTarget = device->explicitRenderPass
+            ? (device->hasExplicitDepthStencilAttachment
+                ? static_cast<MGG_Texture*>(device->explicitDepthStencilAttachment.Target)
+                : nullptr)
             : device->renderTargets[0];
-        id<MTLTexture> depthTexture = device->hasExplicitDepthStencilAttachment
-            ? depthTarget->texture
+        id<MTLTexture> depthTexture = device->explicitRenderPass
+            ? (depthTarget == nullptr ? nil : depthTarget->texture)
             : depthTarget->depthTexture;
         if (depthTexture != nil)
         {
@@ -924,8 +926,12 @@ static MTLPixelFormat MGMetalCurrentDepthFormat(MGG_GraphicsDevice* device)
 {
     if (device->renderTargetCount == 0)
         return device->backBufferDepth == nil ? MTLPixelFormatInvalid : device->backBufferDepth.pixelFormat;
-    if (device->hasExplicitDepthStencilAttachment)
+    if (device->explicitRenderPass)
+    {
+        if (!device->hasExplicitDepthStencilAttachment)
+            return MTLPixelFormatInvalid;
         return static_cast<MGG_Texture*>(device->explicitDepthStencilAttachment.Target)->texture.pixelFormat;
+    }
     MGG_Texture* first = device->renderTargets[0];
     return first->depthTexture == nil ? MTLPixelFormatInvalid : first->depthTexture.pixelFormat;
 }

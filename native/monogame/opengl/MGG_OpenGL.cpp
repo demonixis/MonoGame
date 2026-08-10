@@ -1707,7 +1707,7 @@ static MGGraphicsDeviceStatus MGGLSetRenderTargets(
             independentDepthStencil->handle,
             0);
     }
-    else if (first && first->depthBuffer)
+    else if (!explicitRenderPass && first && first->depthBuffer)
     {
         const GLenum attachment = first->depthFormat == MGDepthFormat::Depth24Stencil8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT;
         gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, first->depthBuffer);
