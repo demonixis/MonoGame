@@ -230,7 +230,7 @@ namespace Microsoft.Xna.Framework.Graphics
         {
             get
             {
-#if NATIVE
+#if NATIVE || NATIVE_GRAPHICS
                 if (_explicitRenderPassActive)
                     return _explicitDepthFormat;
 #endif
@@ -972,14 +972,14 @@ namespace Microsoft.Xna.Framework.Graphics
                 }
             }
 
-#if NATIVE
+#if NATIVE || NATIVE_GRAPHICS
             PlatformValidateRenderTargets(renderTargets);
 #endif
 
             // Try to early out if the current and new bindings are equal.
             if (_currentRenderTargetCount == renderTargetCount)
             {
-#if NATIVE
+#if NATIVE || NATIVE_GRAPHICS
                 var isEqual = !_explicitRenderPassActive;
 #else
                 var isEqual = true;

@@ -123,7 +123,7 @@ namespace Microsoft.Xna.Framework
 	    /// </summary>
 		public event EventHandler<EventArgs> ScreenDeviceNameChanged;
 
-#if WINDOWS || DESKTOPGL|| ANGLE || NATIVE
+#if WINDOWS || DESKTOPGL || ANGLE || NATIVE || NATIVE_GRAPHICS
 
         /// <summary>
 		/// Use this event to user text input.
@@ -132,11 +132,16 @@ namespace Microsoft.Xna.Framework
 		/// This event also supports key repeat.
 		/// </summary>
 		/// <remarks>
-		/// This event is only supported on desktop platforms.
+		/// This event is exposed by desktop and native-graphics platform heads. Individual hosts
+		/// raise it only when their input bridge supplies text events.
 		/// </remarks>
 		public event EventHandler<TextInputEventArgs> TextInput;
 
         internal bool IsTextInputHandled { get { return TextInput != null; } }
+
+#endif
+
+#if WINDOWS || DESKTOPGL || ANGLE || NATIVE
 
         /// <summary>
         /// Buffered keyboard KeyDown event.
@@ -228,7 +233,7 @@ namespace Microsoft.Xna.Framework
             EventHelpers.Raise(this, ScreenDeviceNameChanged, EventArgs.Empty);
 		}
 
-#if WINDOWS || DESKTOPGL || ANGLE || NATIVE
+#if WINDOWS || DESKTOPGL || ANGLE || NATIVE || NATIVE_GRAPHICS
 
 	    /// <summary>
 	    /// Called when the window receives text input. Raises the <see cref="TextInput"/> event.
@@ -238,6 +243,11 @@ namespace Microsoft.Xna.Framework
 		{
             EventHelpers.Raise(this, TextInput, e);
 		}
+
+#endif
+
+#if WINDOWS || DESKTOPGL || ANGLE || NATIVE
+
         internal void OnKeyDown(InputKeyEventArgs e)
 	    {
             EventHelpers.Raise(this, KeyDown, e);
