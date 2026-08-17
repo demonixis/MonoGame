@@ -110,7 +110,9 @@ namespace Microsoft.Xna.Framework
         #region Hide statusbar for iOS 7 or newer
         public override bool PrefersStatusBarHidden()
         {
-            return _platform.Game.graphicsDeviceManager.IsFullScreen;
+            // iOSGamePlatform does not implement a windowed mode. Keep UIKit's
+            // controller-owned status bar policy consistent with that contract.
+            return true;
         }
         #endregion
 
@@ -149,14 +151,19 @@ namespace Microsoft.Xna.Framework
         #region iOS 11 or newer
 
         /// <summary>
-        /// Defer system gestures on all screen edges in full screen mode.
+        /// Automatically hide the home indicator while the game owns the screen.
+        /// </summary>
+        public override bool PrefersHomeIndicatorAutoHidden
+        {
+            get { return true; }
+        }
+
+        /// <summary>
+        /// Defer system gestures on all screen edges while the game owns the screen.
         /// </summary>
         public override UIRectEdge PreferredScreenEdgesDeferringSystemGestures
         {
-            get
-            {
-                return _platform.Game.graphicsDeviceManager.IsFullScreen ? UIRectEdge.All : base.PreferredScreenEdgesDeferringSystemGestures;
-            }
+            get { return UIRectEdge.All; }
         }
 
         #endregion
