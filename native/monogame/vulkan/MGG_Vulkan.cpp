@@ -346,7 +346,9 @@ struct MGG_GraphicsDevice
 	int syncInterval = 0;
 	bool swapchainTrace = false;
 	bool swapchainAcquireOutOfDate = false;
+	bool swapchainAcquireSuboptimal = false;
 	uint64_t swapchainGeneration = 0;
+	uint64_t swapchainSuboptimalRecreateGeneration = std::numeric_limits<uint64_t>::max();
 
 	uint32_t timestampValidBits = 0;
 	double timestampPeriodNanoseconds = 0.0;
@@ -2017,6 +2019,7 @@ static void MGVK_CleanupSwapChain(MGG_GraphicsDevice* device, bool queueLockHeld
 		frame.timingStarted = false;
 		frame.timingSubmissionId = 0;
 	}
+	device->swapchainAcquireSuboptimal = false;
 
 	// Destroy all the frame resources.
 	device->pipelineState.targets = nullptr;
@@ -2771,6 +2774,7 @@ void MGVK_RecreateSwapChain(
 
 	++device->swapchainGeneration;
 	device->swapchainAcquireOutOfDate = false;
+	device->swapchainAcquireSuboptimal = false;
 	device->frameIndex = device->swapchainCount > 0 ? device->frame % device->swapchainCount : 0;
 	if (device->swapchainTrace)
 	{
@@ -2917,6 +2921,26 @@ static void MGVK_BeginPresentationTiming(MGG_GraphicsDevice* device, MGVK_Frame&
 	frame.timingSubmissionId = 0;
 }
 
+static constexpr bool MGVK_ShouldRecreateAfterPresent(
+	VkResult presentResult,
+	bool acquireWasSuboptimal,
+	uint64_t swapchainGeneration,
+	uint64_t suboptimalRecreateGeneration)
+{
+	if (presentResult == VK_ERROR_OUT_OF_DATE_KHR)
+		return true;
+	if (presentResult != VK_SUBOPTIMAL_KHR && !acquireWasSuboptimal)
+		return false;
+	return suboptimalRecreateGeneration != swapchainGeneration;
+}
+
+static_assert(MGVK_ShouldRecreateAfterPresent(VK_ERROR_OUT_OF_DATE_KHR, false, 2, 2));
+static_assert(MGVK_ShouldRecreateAfterPresent(VK_SUBOPTIMAL_KHR, false, 2, 1));
+static_assert(MGVK_ShouldRecreateAfterPresent(VK_SUCCESS, true, 2, 1));
+static_assert(!MGVK_ShouldRecreateAfterPresent(VK_SUBOPTIMAL_KHR, false, 2, 2));
+static_assert(!MGVK_ShouldRecreateAfterPresent(VK_SUCCESS, true, 2, 2));
+static_assert(!MGVK_ShouldRecreateAfterPresent(VK_SUCCESS, false, 2, 1));
+
 bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 {
 	VkResult res;
@@ -2955,13 +2979,17 @@ bool MGVK_TryAcquireSwap(MGG_GraphicsDevice* device, MGVK_Frame& frame)
 			printf("vkAcquireNextImageKHR failed with VkResult %d.\n", res);
 			return false;
 		}
-		if (res == VK_SUBOPTIMAL_KHR && device->swapchainTrace)
+		if (res == VK_SUBOPTIMAL_KHR)
 		{
-			printf(
-				"MONOGAME_VULKAN_SWAPCHAIN_TRACE usable-suboptimal generation=%llu operation=acquire extent=%ux%u\n",
-				static_cast<unsigned long long>(device->swapchainGeneration),
-				device->swapchainWidth,
-				device->swapchainHeight);
+			device->swapchainAcquireSuboptimal = true;
+			if (device->swapchainTrace)
+			{
+				printf(
+					"MONOGAME_VULKAN_SWAPCHAIN_TRACE usable-suboptimal generation=%llu operation=acquire extent=%ux%u\n",
+					static_cast<unsigned long long>(device->swapchainGeneration),
+					device->swapchainWidth,
+					device->swapchainHeight);
+			}
 		}
 	}
 
@@ -3438,7 +3466,14 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 		return;
 	}
 
-	const bool recreateAfterPresent = res == VK_ERROR_OUT_OF_DATE_KHR;
+	const bool acquireWasSuboptimal = device->swapchainAcquireSuboptimal;
+	device->swapchainAcquireSuboptimal = false;
+	const bool presentWasSuboptimal = res == VK_SUBOPTIMAL_KHR;
+	const bool recreateAfterPresent = MGVK_ShouldRecreateAfterPresent(
+		res,
+		acquireWasSuboptimal,
+		device->swapchainGeneration,
+		device->swapchainSuboptimalRecreateGeneration);
 	if (res == VK_SUBOPTIMAL_KHR)
 	{
 		if (device->swapchainTrace)
@@ -3450,7 +3485,7 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 				device->swapchainHeight);
 		}
 	}
-	else if (!recreateAfterPresent)
+	else if (res != VK_ERROR_OUT_OF_DATE_KHR)
 	{
 		VK_CHECK_RESULT(res);
 	}
@@ -3488,7 +3523,13 @@ void MGG_GraphicsDevice_Present(MGG_GraphicsDevice* device, mgint currentFrame, 
 	// No references into device->frames may survive this point: recreation can
 	// resize both frame and swapchain arrays when the image count changes.
 	if (recreateAfterPresent)
-		MGVK_RecreateSwapChain(device, "present-out-of-date");
+	{
+		if (presentWasSuboptimal || acquireWasSuboptimal)
+			device->swapchainSuboptimalRecreateGeneration = device->swapchainGeneration;
+		MGVK_RecreateSwapChain(
+			device,
+			res == VK_ERROR_OUT_OF_DATE_KHR ? "present-out-of-date" : "present-suboptimal");
+	}
 
 	// Get the next swap frame here so that any blocking waiting for the GPU to
 	// finish occurs during Present.  This must be outside queueMutex because a

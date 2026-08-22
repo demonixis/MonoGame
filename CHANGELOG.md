@@ -15,6 +15,10 @@
 
 ### Fixed
 
+- Native Vulkan now presents a usable `VK_SUBOPTIMAL_KHR` image and then
+  rebuilds the swapchain at most once per generation, preventing Linux startup
+  from remaining on the hidden SDL window's initial 800x480 surface after the
+  client grows to its requested size.
 - Native Vulkan swapchains now honor an authoritative surface `currentExtent`, keep requested and realized extents separate, retain usable `VK_SUBOPTIMAL_KHR` images, and bound acquire/recreation retries without moving the SDL window.
 - Native desktop window resize events now reset the native swapchain before raising `ClientSizeChanged`, keeping the presentation parameters, viewport, scissor and Metal/Vulkan/OpenGL drawable at the user-resized SDL window dimensions.
 - Native Metal now caches render pipeline variants across render-target switches, avoids redundant pipeline-state invalidation, and bounds retries after a transient compiler-service failure to once per variant per frame.
