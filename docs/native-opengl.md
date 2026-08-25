@@ -36,7 +36,7 @@ The Native OpenGL pipeline is separate from the DesktopGL/MojoShader path:
 
 | Profile | MGFX format | GLSL output | XNB platform |
 | --- | ---: | --- | --- |
-| `OpenGLES_3_0` | 82 | `#version 300 es` | `AndroidNativeGLES` (`E`), `iOSNativeGLES` (`U`) |
+| `OpenGLES_3_0` | 82 | `#version 300 es` | `AndroidNativeGLES` (`E`), `iOSNativeGLES` (`u`) |
 | `OpenGL_4_1` | 84 | `#version 410 core` | `DesktopNativeGL` (`L`) |
 
 MGFX compiles MonoGame vertex and pixel shaders with DXC to SPIR-V. The pinned
