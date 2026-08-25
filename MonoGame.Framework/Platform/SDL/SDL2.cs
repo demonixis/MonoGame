@@ -400,16 +400,7 @@ internal static class Sdl
         {
             public Version version;
             public SysWMType subsystem;
-            public IntPtr info0;
-            public IntPtr info1;
-            public IntPtr info2;
-            public IntPtr info3;
-            public IntPtr info4;
-            public IntPtr info5;
-            public IntPtr info6;
-            public IntPtr info7;
-
-            public IntPtr window => info0;
+            public IntPtr window;
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

@@ -15,7 +15,6 @@ namespace Microsoft.Xna.Framework.Graphics
         internal PixelFormat glFormat;
         internal PixelType glType;
         internal SamplerState glLastSamplerState;
-        internal bool glTextureOwned = true;
 
         private void PlatformGraphicsDeviceResetting()
         {
@@ -37,7 +36,7 @@ namespace Microsoft.Xna.Framework.Graphics
 
         private void DeleteGLTexture()
         {
-            if (glTexture > 0 && glTextureOwned)
+            if (glTexture > 0)
             {
                 GraphicsDevice.DisposeTexture(glTexture);
             }

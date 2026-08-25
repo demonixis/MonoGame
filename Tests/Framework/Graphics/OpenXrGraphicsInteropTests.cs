@@ -29,5 +29,19 @@ namespace MonoGame.Tests.Graphics
             Assert.Throws<ArgumentNullException>(() => OpenXrGraphicsInterop.PrepareForRuntimeRelease(null));
             Assert.Throws<ArgumentNullException>(() => OpenXrGraphicsInterop.WrapExternalRenderTarget(null, new IntPtr(1), 1, 1, SurfaceFormat.Color));
         }
+
+#if DESKTOPGL
+        [Test]
+        public void DesktopGlDoesNotExposeNativeOpenXrBootstrap()
+        {
+            Assert.Throws<PlatformNotSupportedException>(() =>
+                OpenXrGraphicsInterop.ConfigureVulkanBootstrap(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero));
+            Assert.Throws<PlatformNotSupportedException>(() =>
+                OpenXrGraphicsInterop.ConfigureDirect3D12Adapter(0, 0));
+            Assert.Throws<PlatformNotSupportedException>(() =>
+                OpenXrGraphicsInterop.ConfigureMetalDevice(IntPtr.Zero));
+            Assert.AreEqual(IntPtr.Zero, OpenXrGraphicsInterop.GetVulkanGetInstanceProcAddr());
+        }
+#endif
     }
 }
