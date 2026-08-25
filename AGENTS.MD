@@ -4,7 +4,8 @@ This file is the operational guide for maintainers and automated coding agents
 working in this checkout. Read it together with,
 `CODESTYLE.md`, and `REQUIREMENTS.md` before changing the repository.
 
-Upstream doesn't allow LLM-generated contributions BUT this fork is private and is open for LLM contributions.
+This fork targets general MonoGame users. Human- and tool-assisted changes must
+follow the same review, compatibility, and validation requirements.
 
 ## Project goals
 

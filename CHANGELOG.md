@@ -4,14 +4,15 @@
 
 ### Changed
 
-- Updated the C3DE-consumed .NET 10 preview lanes to SDK and workload set
+- Updated the additive .NET 10 preview lanes to SDK and workload set
   10.0.302, Xcode 26.6, and Apple target platform version 26.5. The general
   .NET 9.0.314 lane remains unchanged.
 - Native Metal and Vulkan now expose non-blocking completed-presentation GPU timing through `GraphicsDevice.SupportsCompletedGpuFrameTiming`, `TryDequeueCompletedGpuFrameTiming`, and `GpuFrameTiming`. Results use a bounded 64-entry native queue and report cumulative losses.
 - Added an opt-in native OpenGL/OpenGL ES backend, explicit Android, iOS and
   desktop packages, versioned capability and render-target ABI entry points,
   dedicated MGFX profiles, and deterministic four-target MRT validation.
-- The C3DE source-reference Android GLES and iOS OpenGL framework heads now target .NET 10 with explicit Android API 36/API 23+ and Apple SDK 26.2 contracts.
+- Restored the historical Android GLES and iOS OpenGL heads to their upstream
+  .NET 8 contracts while keeping the additive native mobile heads on .NET 10.
 
 ### Fixed
 

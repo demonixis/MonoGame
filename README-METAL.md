@@ -14,8 +14,8 @@ precedence.
 The Metal backend is an additive preview target. It does not replace the
 existing OpenGL or Vulkan backends and does not change their packages.
 
-The fork also exposes an experimental, non-owning OpenXR interop surface used
-by C3DE's optional XR module. On macOS Metal, an OpenXR runtime may require the
+The fork also exposes an experimental, non-owning OpenXR interop surface for
+optional native XR integrations. On macOS Metal, an OpenXR runtime may require the
 `MTLDevice` before graphics creation; the backend then creates and exposes its
 command queue from that exact device, wraps runtime-owned color textures without
 releasing them, and commits work without presenting a desktop drawable. This is
