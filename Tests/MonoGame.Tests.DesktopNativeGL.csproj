@@ -24,7 +24,6 @@
     <Compile Remove="Framework/WindowsDX/**" />
     <Compile Remove="obj/**/*" />
     <Compile Remove="**/obj/**/*.cs" />
-    <Compile Remove="VisionOSInputContract/**/*" />
     <Compile Remove="Properties/**/*" />
     <Compile Remove="Interactive/**/*" />
     <Compile Remove="Runner/iOS/**/*" />

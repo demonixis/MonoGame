@@ -1,8 +1,0 @@
-<Solution>
-  <Folder Name="/Managed/">
-    <Project Path="MonoGame.Framework/MonoGame.Framework.MacOS.Metal.csproj" />
-  </Folder>
-  <Folder Name="/Validation/">
-    <Project Path="Tests/VisionOSInputContract/VisionOSInputContract.csproj" />
-  </Folder>
-</Solution>

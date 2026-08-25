@@ -27,7 +27,6 @@ interop source/build scope only and does not qualify a macOS OpenXR runtime.
 | Intel macOS | Functional preview | SDL2 + `CAMetalLayer` | Universal dylib | macOS 15 |
 | iPhone/iPad arm64 | Preview; physical-device qualification incomplete | UIKit + `CAMetalLayer` | Static XCFramework library | iOS/iPadOS 18 |
 | iOS simulator arm64/x64 | Functional preview | UIKit + `CAMetalLayer` | Static XCFramework library | iOS/iPadOS 18 |
-| visionOS / Apple Vision Pro | Phase 1 input/host source; presenter and managed runtime incomplete | SwiftUI `ImmersiveSpace` + `CompositorLayer` | Input XCFramework only | visionOS 2.0 for the input bridge |
 
 The current public names are:
 
@@ -38,14 +37,6 @@ The current public names are:
 - native libraries: `mgruntime-metal`;
 - packages: `MonoGame.Framework.MacOS.Metal` and
   `MonoGame.Framework.iOS.Metal`.
-
-The visionOS phase is now started. The repository contains a .NET 10 contract
-solution, an allocation-free spatial-input API, an ARKit native bridge, and a
-typechecked fully immersive Swift host. There is still no visionOS TFM,
-MonoGame package, linked immersive presenter, render loop, or content
-identifier because workload set 10.0.302 does not provide a visionOS workload.
-See [`docs/visionos-fully-immersive.md`](docs/visionos-fully-immersive.md) for
-the implemented surface and the remaining gates.
 
 macOS and iOS remain separate application projects: one binary does not target
 both platforms at the same time. A single solution can still share all game
@@ -536,74 +527,6 @@ must at least:
 Metal must not become the default Apple target until these gates pass and the
 migration is explicitly approved. Existing OpenGL and Vulkan targets remain
 unchanged until then.
-
-## visionOS / Apple Vision Pro roadmap
-
-visionOS is developed as a separate additive phase. The input ABI and host
-source can now be compiled with Xcode, while the managed contract is validated
-with the repository's pinned .NET 10 lane. This does not yet produce a runnable
-MonoGame immersive application.
-
-### Phase 1: visionOS contract and host (in progress)
-
-- Fully immersive rendering is the first selected mode; window and volume
-  rendering remain outside this phase.
-- Keep the .NET 10.0.302 pin, but defer the TFM and RIDs until an official
-  visionOS workload exposes them.
-- The SwiftUI/Compositor Services host source exists without SDL2.
-- The public `VisionOSInput` contract covers head tracking, per-eye matrices,
-  27 joints per hand, and system-resolved spatial interactions.
-- The ARKit input bridge builds as device and universal simulator slices.
-- Add an internal presenter suited to the visionOS composition mode while
-  keeping the public MGG ABI backend-neutral.
-- Handle lifecycle events, surface changes, temporary drawable unavailability,
-  and clean shutdown.
-
-Immersive rendering may require a presentation contract different from a
-simple `CAMetalLayer`. That decision must remain isolated in the presenter and
-must not leak into public APIs or the shared renderer.
-
-### Phase 2: target, runtime, and shaders
-
-- Add a dedicated visionOS framework project.
-- Append unique `TargetPlatform` and XNB identifiers without reusing the macOS
-  or iOS values.
-- Define a visionOS Metal Shader Converter profile and payload format.
-- Produce the required device and simulator slices in an XCFramework.
-- Create a distinct `MonoGame.Framework.*.Metal` package containing only the
-  required visionOS artifacts.
-- Compile and validate all six stock effects for the platform.
-
-The exact runtime project name, package name, RIDs, and shader profile are
-deliberately not frozen during the initial contract phase.
-
-### Phase 3: platform integration
-
-- Extend the implemented hand, spatial-interaction, head, view-matrix, and
-  predicted-display-time contract as device validation requires.
-- Add controller support through the selected public platform APIs.
-- Keep orientation, tracking, and frame timing in coherent per-frame snapshots.
-- Audio and spatial behavior compatible with the visionOS model.
-- Memory pressure, resume, interruptions, and scene transitions.
-- A clear policy for stereo rendering, render targets, and dynamic resolution.
-- Integration of 2D/volume and immersive modes without macOS or iOS
-  regressions.
-
-### Phase 4: validation and delivery
-
-- Automated build and smoke testing on a visionOS simulator.
-- A signed smoke test on a physical Apple Vision Pro.
-- Metal API/GPU Validation without errors.
-- Frame pacing, latency, tracking, and lifecycle validation.
-- Architecture, symbol, and dependency audits proving the absence of
-  Vulkan/MoltenVK/SPIR-V.
-- AOT/trimming tests and package-consumption tests.
-- Dedicated visionOS application documentation and example.
-
-visionOS may move from phase-1 source to preview only after the presenter,
-runtime, shaders, and package in phases 1 and 2 are complete. It may be
-declared production-ready only after the physical-device gates in phase 4
-pass.
 
 ## Troubleshooting
 

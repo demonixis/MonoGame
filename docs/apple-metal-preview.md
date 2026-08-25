@@ -13,15 +13,6 @@ separate from the existing Vulkan, DirectX, and OpenGL backends.
 - HLSL shader input compiled to DXIL and converted with Apple's Metal Shader
   Converter. Vulkan, MoltenVK, and SPIR-V are not part of this lane.
 
-visionOS phase 1 is in progress. The repository now has a .NET 10 input-contract
-solution, public head/hand/interaction APIs, an ARKit bridge that builds device
-and simulator slices, and a typechecked SwiftUI fully immersive host. The
-Compositor Services presenter, render loop, managed visionOS runtime/package,
-shader payload, and simulator/device smoke tests are not implemented yet.
-Workload set 10.0.302 currently exposes no visionOS workload, so the repository
-does not invent a `net10.0-visionos` TFM. The detailed contract and commands are
-in [`visionos-fully-immersive.md`](visionos-fully-immersive.md).
-
 ## Build
 
 Install Xcode 26.6, .NET SDK 10.0.302 with workload set 10.0.302 for `macos`
@@ -160,6 +151,3 @@ effect-compiler error rather than falling back to Vulkan or SPIR-V.
 - The remaining stock-effect, lifecycle, and hardware gates above are complete
   before enabling Metal templates or making Metal the default on any Apple
   platform.
-- visionOS remains excluded from packages and release jobs until the native
-  presenter, official managed workload, shaders, lifecycle, and hardware gates
-  in `visionos-fully-immersive.md` are complete.

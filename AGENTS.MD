@@ -123,9 +123,7 @@ Upstream doesn't allow LLM-generated contributions BUT this fork is private and 
   `CAMetalLayer`. iOS keeps UIKit, touch/controller input, audio/media, and its
   application lifecycle while replacing the OpenGL view with `CAMetalLayer`.
 - The shared Objective-C++ renderer must depend on an internal Metal presenter,
-  not directly on SDL or UIKit. This is the only visionOS preparation in the
-  initial implementation: do not add a visionOS TFM, package, public enum,
-  runtime host, or test until support is explicitly scheduled.
+  not directly on SDL or UIKit.
 - The deployment floors are macOS 15 and iOS 18. macOS artifacts are universal
   `arm64+x64`; iOS artifacts include device arm64 and simulator arm64/x64.
 - Shaders use HLSL -> DXIL -> Apple Metal Shader Converter -> Metal IR/metallib.
@@ -153,8 +151,6 @@ Upstream doesn't allow LLM-generated contributions BUT this fork is private and 
   proving that Metal packages contain no Vulkan or MoltenVK dependency.
 - iOS validation includes simulator builds plus an arm64 device smoke run with
   AOT/trimming, orientation changes, background/foreground, and frame pacing.
-- visionOS is intentionally not built or tested during the scaffold-only phase.
-
 ## .NET SDK policy
 
 - The C3DE-consumed Android GLES and iOS OpenGL framework heads target
