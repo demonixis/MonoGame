@@ -21,15 +21,16 @@ namespace MonoGame.Tests.ContentPipeline
         public void AppleMetalPlatformsAreAppendOnly()
         {
             Assert.AreEqual(15, (int)TargetPlatform.XboxSeries);
-            Assert.AreEqual(16, (int)TargetPlatform.MacOSMetal);
-            Assert.AreEqual(17, (int)TargetPlatform.iOSMetal);
+            Assert.AreEqual(16, (int)TargetPlatform.Switch2);
+            Assert.AreEqual(17, (int)TargetPlatform.MacOSMetal);
+            Assert.AreEqual(18, (int)TargetPlatform.iOSMetal);
         }
 
         [Test]
         public void AppleMetalPlatformsHaveStableXnbIdentifiers()
         {
             var writerField = typeof(ContentWriter).GetField(
-                "targetPlatformIdentifiers",
+                "TargetPlatformIdentifiers",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var writerIdentifiers = (char[])writerField.GetValue(null);
 
@@ -38,8 +39,10 @@ namespace MonoGame.Tests.ContentPipeline
                 BindingFlags.NonPublic | BindingFlags.Static);
             var readerIdentifiers = (List<char>)readerField.GetValue(null);
 
+            Assert.AreEqual('U', writerIdentifiers[(int)TargetPlatform.Switch2]);
             Assert.AreEqual('A', writerIdentifiers[(int)TargetPlatform.MacOSMetal]);
             Assert.AreEqual('I', writerIdentifiers[(int)TargetPlatform.iOSMetal]);
+            Assert.AreEqual('U', readerIdentifiers[(int)TargetPlatform.Switch2]);
             Assert.AreEqual('A', readerIdentifiers[(int)TargetPlatform.MacOSMetal]);
             Assert.AreEqual('I', readerIdentifiers[(int)TargetPlatform.iOSMetal]);
         }

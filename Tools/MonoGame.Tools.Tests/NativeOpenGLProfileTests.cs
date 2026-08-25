@@ -26,20 +26,20 @@ namespace MonoGame.Tests.ContentPipeline
         [Test]
         public void PlatformsAndXnbIdentifiersAreAppendOnlyAndUnique()
         {
-            Assert.AreEqual(19, (int)TargetPlatform.AndroidNativeGLES);
-            Assert.AreEqual(20, (int)TargetPlatform.iOSNativeGLES);
-            Assert.AreEqual(21, (int)TargetPlatform.DesktopNativeGL);
+            Assert.AreEqual(20, (int)TargetPlatform.AndroidNativeGLES);
+            Assert.AreEqual(21, (int)TargetPlatform.iOSNativeGLES);
+            Assert.AreEqual(22, (int)TargetPlatform.DesktopNativeGL);
 
             var writerIdentifiers = (char[])typeof(ContentWriter).GetField(
-                "targetPlatformIdentifiers", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+                "TargetPlatformIdentifiers", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
             var readerIdentifiers = (List<char>)typeof(ContentManager).GetField(
                 "targetPlatformIdentifiers", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
 
             Assert.AreEqual('E', writerIdentifiers[(int)TargetPlatform.AndroidNativeGLES]);
-            Assert.AreEqual('U', writerIdentifiers[(int)TargetPlatform.iOSNativeGLES]);
+            Assert.AreEqual('u', writerIdentifiers[(int)TargetPlatform.iOSNativeGLES]);
             Assert.AreEqual('L', writerIdentifiers[(int)TargetPlatform.DesktopNativeGL]);
             Assert.AreEqual('E', readerIdentifiers[(int)TargetPlatform.AndroidNativeGLES]);
-            Assert.AreEqual('U', readerIdentifiers[(int)TargetPlatform.iOSNativeGLES]);
+            Assert.AreEqual('u', readerIdentifiers[(int)TargetPlatform.iOSNativeGLES]);
             Assert.AreEqual('L', readerIdentifiers[(int)TargetPlatform.DesktopNativeGL]);
             Assert.AreEqual(writerIdentifiers.Length, writerIdentifiers.Distinct().Count());
             Assert.AreEqual(readerIdentifiers.Count, readerIdentifiers.Distinct().Count());

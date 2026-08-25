@@ -2,7 +2,6 @@
 // This file is subject to the terms and conditions defined in
 // file 'LICENSE.txt', which is part of this source code package.
 
-using System;
 using System.ComponentModel;
 using System.Globalization;
 
@@ -101,49 +100,48 @@ namespace Microsoft.Xna.Framework.Content.Pipeline
         /// Xbox Series S|X
         /// </summary>
         XboxSeries,
+        /// <summary>
+        /// Nintendo Switch 2
+        /// </summary>
+        Switch2 = 16,
 
         /// <summary>
         /// Apple macOS devices using Metal.
         /// </summary>
-        MacOSMetal,
+        MacOSMetal = 17,
 
         /// <summary>
         /// Apple iOS and iPadOS devices using Metal.
         /// </summary>
-        iOSMetal,
+        iOSMetal = 18,
 
         /// <summary>
         /// Android-based devices using Vulkan.
         /// </summary>
-        AndroidVK = 18,
+        AndroidVK = 19,
 
         /// <summary>
         /// Android devices using the additive Native OpenGL ES 3.0 backend.
         /// </summary>
-        AndroidNativeGLES = 19,
+        AndroidNativeGLES = 20,
 
         /// <summary>
         /// Apple iOS and iPadOS devices using the additive Native OpenGL ES 3.0 backend.
         /// </summary>
-        iOSNativeGLES = 20,
+        iOSNativeGLES = 21,
 
         /// <summary>
         /// Desktop systems using the additive Native OpenGL 4.1 backend.
         /// </summary>
-        DesktopNativeGL = 21
+        DesktopNativeGL = 22,
     }
-
 
     /// <summary>
     /// Deserialize legacy Platforms from .MGCB files.
     /// </summary>
-    internal class TargetPlatformTypeConverter : EnumConverter
+    internal class TargetPlatformTypeConverter(Type type) : EnumConverter(type)
     {
-        public TargetPlatformTypeConverter(Type type) : base(type)
-        {
-        }
-
-        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
+        public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
         {   
             try
             {

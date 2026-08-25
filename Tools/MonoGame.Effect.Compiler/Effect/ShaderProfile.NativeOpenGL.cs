@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -68,7 +69,7 @@ namespace MonoGame.Effect
             EffectObject effect,
             ref string errorsAndWarnings)
         {
-            var outputPath = Path.GetDirectoryName(shaderResult.OutputFilePath);
+            var outputPath = Path.GetDirectoryName(shaderResult.OutputFilePath) ?? Directory.GetCurrentDirectory();
             var sourceFileName = Path.GetFileNameWithoutExtension(shaderResult.FilePath) + "." + shaderFunction;
             var intermediateDirectory = outputPath;
             var hlslFile = Path.Combine(intermediateDirectory, sourceFileName + ".nativegl.hlsl");
@@ -174,18 +175,18 @@ namespace MonoGame.Effect
             arguments.Append("-nologo -spirv -fvk-use-gl-layout ");
             if (includeReflection)
                 arguments.Append("-fspv-reflect ");
-            arguments.Append($"-fvk-t-shift {TextureSlotOffset} all ");
-            arguments.Append($"-fvk-s-shift {SamplerSlotOffset} all ");
+            arguments.Append(CultureInfo.InvariantCulture, $"-fvk-t-shift {TextureSlotOffset} all ");
+            arguments.Append(CultureInfo.InvariantCulture, $"-fvk-s-shift {SamplerSlotOffset} all ");
             if (!isVertexShader)
                 arguments.Append("-auto-binding-space 1 ");
-            arguments.Append($"-T {(isVertexShader ? "vs" : "ps")}_6_0 -E main ");
+            arguments.Append(CultureInfo.InvariantCulture, $"-T {(isVertexShader ? "vs" : "ps")}_6_0 -E main ");
             if (isVertexShader)
                 arguments.Append("-fvk-use-dx-position-w ");
             if (debug)
                 arguments.Append("-Zi ");
             if (includeReflection)
-                arguments.Append($"-Fc \"{reflection}\" ");
-            arguments.Append($"-Fo \"{output}\" \"{input}\"");
+                arguments.Append(CultureInfo.InvariantCulture, $"-Fc \"{reflection}\" ");
+            arguments.Append(CultureInfo.InvariantCulture, $"-Fo \"{output}\" \"{input}\"");
             return arguments.ToString();
         }
 
@@ -310,20 +311,27 @@ namespace MonoGame.Effect
                 if (image == null || samplerVariable == null)
                     throw new ShaderCompilerException($"Unable to match combined sampler '{combination.Name}'.");
 
+                var samplerName = samplerVariable.Name
+                    ?? throw new ShaderCompilerException($"Combined sampler '{combination.Name}' has no SPIR-V name.");
+                var imageName = image.Name
+                    ?? throw new ShaderCompilerException($"Image for combined sampler '{combination.Name}' has no SPIR-V name.");
+                if (image.Pointer.PointerType is not SpirvTypeImage imageType)
+                    throw new ShaderCompilerException($"Image for combined sampler '{combination.Name}' has an invalid SPIR-V type.");
+
                 var sampler = new ShaderData.Sampler
                 {
                     textureSlot = combination.TextureBinding - TextureSlotOffset,
                     samplerSlot = combination.SamplerBinding - SamplerSlotOffset,
-                    samplerName = samplerVariable.Name,
+                    samplerName = samplerName,
                     parameterName = combinationsByTexture[combination.TextureBinding] == 1
-                        ? image.Name
-                        : $"{samplerVariable.Name}+{image.Name}",
-                    type = ToSamplerType((SpirvTypeImage)image.Pointer.PointerType),
+                        ? imageName
+                        : $"{samplerName}+{imageName}",
+                    type = ToSamplerType(imageType),
                 };
 
-                if (!shaderResult.ShaderInfo.SamplerStates.TryGetValue(samplerVariable.Name, out var samplerStateInfo))
+                if (!shaderResult.ShaderInfo.SamplerStates.TryGetValue(samplerName, out var samplerStateInfo))
                 {
-                    errorsAndWarnings += $"Could not find sampler state info for sampler '{samplerVariable.Name}'; using defaults.\n";
+                    errorsAndWarnings += $"Could not find sampler state info for sampler '{samplerName}'; using defaults.\n";
                     samplerStateInfo = new SamplerStateInfo();
                 }
                 sampler.state = samplerStateInfo.State;
@@ -335,13 +343,17 @@ namespace MonoGame.Effect
                 var image = FindImage(variables, reflectedImage.TextureBinding);
                 if (image == null)
                     throw new ShaderCompilerException($"Unable to match standalone image '{reflectedImage.Name}'.");
+                var imageName = image.Name
+                    ?? throw new ShaderCompilerException($"Standalone image '{reflectedImage.Name}' has no SPIR-V name.");
+                if (image.Pointer.PointerType is not SpirvTypeImage imageType)
+                    throw new ShaderCompilerException($"Standalone image '{reflectedImage.Name}' has an invalid SPIR-V type.");
                 result.Add(new ShaderData.Sampler
                 {
                     textureSlot = reflectedImage.TextureBinding - TextureSlotOffset,
                     samplerSlot = -1,
                     samplerName = string.Empty,
-                    parameterName = image.Name,
-                    type = ToSamplerType((SpirvTypeImage)image.Pointer.PointerType),
+                    parameterName = imageName,
+                    type = ToSamplerType(imageType),
                     state = null,
                 });
             }
@@ -349,7 +361,7 @@ namespace MonoGame.Effect
             return result.ToArray();
         }
 
-        private static SpirvVariable FindImage(SpirvVariable[] variables, int binding)
+        private static SpirvVariable? FindImage(SpirvVariable[] variables, int binding)
         {
             return variables.FirstOrDefault(candidate =>
                 candidate.BindingSlot == binding && candidate.Pointer?.PointerType?.Type == SpirvType.Image);
@@ -379,8 +391,12 @@ namespace MonoGame.Effect
             {
                 var semantic = input.HlslSemantic ?? input.Id.Replace("%in_var_", string.Empty);
                 var match = Regex.Match(semantic, @"(\D+)(\d+)?");
-                var semanticIndex = match.Groups[2].Success ? int.Parse(match.Groups[2].Value) : 0;
+                var semanticIndex = match.Groups[2].Success
+                    ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture)
+                    : 0;
                 var usage = ToVertexUsage(match.Groups[1].Value, ref errorsAndWarnings);
+                var inputLocation = input.Location
+                    ?? throw new ShaderCompilerException($"Vertex input '{semantic}' has no SPIR-V location.");
 
                 uint locationCount = 1;
                 if (input.Pointer?.PointerType is SpirvTypeArray array)
@@ -400,7 +416,7 @@ namespace MonoGame.Effect
                     {
                         usage = usage,
                         index = semanticIndex + locationIndex,
-                        location = (int)input.Location + locationIndex,
+                        location = checked((int)inputLocation + (int)locationIndex),
                         name = string.Empty,
                     });
                 }

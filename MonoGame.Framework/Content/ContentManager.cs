@@ -50,13 +50,14 @@ namespace Microsoft.Xna.Framework.Content
             'S', // Nintendo Switch
             'b', // WebAssembly and Bridge.NET
             'V', // DesktopVK
-            'G', // Windows GDK
+            'G', // Windows DirectX 12
             's', // Xbox Series
+            'U', // Nintendo Switch 2
             'A', // macOS Metal
             'I', // iOS Metal
             'K', // Android Vulkan
             'E', // Android Native OpenGL ES
-            'U', // iOS Native OpenGL ES
+            'u', // iOS Native OpenGL ES
             'L', // Desktop Native OpenGL
 
             // NOTE: There are additional identifiers for consoles that

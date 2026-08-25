@@ -575,7 +575,8 @@ enum class MGMonoGamePlatform : mgint
     PlayStation5 = 10,
     NintendoSwitch = 11,
     DesktopVK = 12,
-    MacOS = 13,
+    NintendoSwitch2 = 13,
+    MacOS = 14,
 };
 
 enum class MGGraphicsBackend : mgint

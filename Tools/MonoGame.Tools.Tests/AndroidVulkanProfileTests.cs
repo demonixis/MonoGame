@@ -22,15 +22,15 @@ namespace MonoGame.Tests.ContentPipeline
         [Test]
         public void AndroidVulkanPlatformIsAppendOnly()
         {
-            Assert.AreEqual(17, (int)TargetPlatform.iOSMetal);
-            Assert.AreEqual(18, (int)TargetPlatform.AndroidVK);
+            Assert.AreEqual(18, (int)TargetPlatform.iOSMetal);
+            Assert.AreEqual(19, (int)TargetPlatform.AndroidVK);
         }
 
         [Test]
         public void AndroidVulkanPlatformHasUniqueStableXnbIdentifier()
         {
             var writerField = typeof(ContentWriter).GetField(
-                "targetPlatformIdentifiers",
+                "TargetPlatformIdentifiers",
                 BindingFlags.NonPublic | BindingFlags.Static);
             var writerIdentifiers = (char[])writerField.GetValue(null);
 

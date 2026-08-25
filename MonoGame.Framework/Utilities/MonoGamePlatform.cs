@@ -75,8 +75,13 @@ namespace MonoGame.Framework.Utilities
         DesktopVK,
 
         /// <summary>
+        /// Nintendo Switch 2 platform.
+        /// </summary>
+        NintendoSwitch2 = 13,
+
+        /// <summary>
         /// Apple macOS platform using Metal.
         /// </summary>
-        MacOS,
+        MacOS = 14,
     }
 }

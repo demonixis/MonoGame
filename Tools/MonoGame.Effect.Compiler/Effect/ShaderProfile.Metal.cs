@@ -59,7 +59,7 @@ namespace MonoGame.Effect
                 Directory.CreateDirectory(temporaryDirectory);
                 File.WriteAllBytes(dxilPath, dxil);
 
-                byte[] reflection = null;
+                byte[]? reflection = null;
                 var metalLibraries = new List<byte[]>(_converterTargets.Length);
                 for (var index = 0; index < _converterTargets.Length; ++index)
                 {
@@ -97,6 +97,9 @@ namespace MonoGame.Effect
 
                     metalLibraries.Add(File.ReadAllBytes(metalLibraryPath));
                 }
+
+                if (reflection == null)
+                    throw new ShaderCompilerException("Metal Shader Converter produced no reflection data.");
 
                 var entryPoint = Encoding.UTF8.GetBytes(shaderFunction);
                 using (var stream = new MemoryStream())

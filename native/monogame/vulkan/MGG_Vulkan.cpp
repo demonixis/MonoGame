@@ -836,9 +836,9 @@ static VkFormat ToVkFormat(MGVertexElementFormat format)
 	case MGVertexElementFormat::Short4:
 		return VK_FORMAT_R16G16B16A16_SINT;
 	case MGVertexElementFormat::NormalizedShort2:
-		return VK_FORMAT_R16G16_SSCALED;
+		return VK_FORMAT_R16G16_SNORM;
 	case MGVertexElementFormat::NormalizedShort4:
-		return VK_FORMAT_R16G16B16A16_SSCALED;
+		return VK_FORMAT_R16G16B16A16_SNORM;
 	case MGVertexElementFormat::HalfVector2:
 		return VK_FORMAT_R16G16_SFLOAT;
 	case MGVertexElementFormat::HalfVector4:
@@ -1445,18 +1445,6 @@ static void MGVK_EndRenderPass(MGG_GraphicsDevice* device, VkCommandBuffer cmd_b
 {
     if (!device->inRenderPass)
         return;
-
-    if (device->pipelineState.targets)
-    {
-        for (int i = 0; i < device->pipelineState.targets->set.numTargets; i++)
-        {
-            MGG_Texture* target = device->pipelineState.targets->set.targets[i];
-            if (target && target->isTarget && !target->isSwapchain)
-            {
-                target->layouts[0] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            }
-        }
-    }
 
     vkCmdEndRenderPass(cmd_buffer);
     device->inRenderPass = false;
@@ -2757,6 +2745,7 @@ void MGVK_RecreateSwapChain(
 			VK_SET_OBJECT_NAME(device->device, texture->depthTexture->target_view, VK_OBJECT_TYPE_IMAGE_VIEW, "MGG_Texture.depthTexture.target_view (Swapchain %d)", i);
 		}
 
+		texture->layouts[0] = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		device->swapchains[i].texture = texture;
 	}
 
@@ -4126,7 +4115,7 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 {
     const int MAX_ATTACHMENTS = 6;
 
-	if (!device->renderTargetDirty)
+	if (device->inRenderPass && !device->renderTargetDirty)
 		return;
 
 	MGVK_EndRenderPass(device, commandBuffer);
@@ -4288,7 +4277,6 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
                     desc.stencilLoadOp = firstUse ? VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD;
                     desc.initialLayout = firstUse ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                     desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-					target->layouts[0] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 }
             }
 
@@ -4383,19 +4371,30 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 			create_info.subpassCount = 1;
 			create_info.pSubpasses = &subpass_desc;
 			create_info.pDependencies = dependencies;
-			create_info.dependencyCount = 1;
 			if (first->isSwapchain)
 			{				
+				create_info.dependencyCount = 1;
+
 				dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 				dependencies[0].dstSubpass = 0;
-				dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-				dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-				dependencies[0].srcAccessMask = 0;
-				dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+				dependencies[0].srcStageMask =	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+												VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+												VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+				dependencies[0].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+				dependencies[0].dstStageMask =	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+												VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+												VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+				dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+												VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+												VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+												VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 				dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 			}
 			else
 			{
+				create_info.dependencyCount = 2;
+
 				dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 				dependencies[0].dstSubpass = 0;
 				dependencies[0].srcStageMask =
@@ -4427,7 +4426,6 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 						: 0);
 				dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 				dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-				create_info.dependencyCount = 2;
 			}
 
 			VkResult res = vkCreateRenderPass(device->device, &create_info, nullptr, &cached->renderPass);
@@ -4450,6 +4448,16 @@ static void MGVK_UpdateRenderPass(MGG_GraphicsDevice* device, FrameCounter curre
 		}
 
 		device->targetCache[hash] = cached;
+	}
+
+	// Track our layout changes.
+	for (int i = 0; i < cached->set.numTargets; i++)
+	{
+		auto target = cached->set.targets[i];
+		if (target->isSwapchain)
+			target->layouts[0] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		else
+			target->layouts[0] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	}
 
 	// Set the cache for the changed pipeline state.
@@ -5254,7 +5262,8 @@ void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
 
 	// We resolve MSAA and mips to the active command buffer.
 	auto& frame = device->frames[device->frameIndex];
-	
+	bool endPass = true;
+
     for (int i = 0; i < psoTargets->set.numTargets; ++i)
     {
         MGG_Texture* renderTarget = psoTargets->set.targets[i];
@@ -5264,6 +5273,11 @@ void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
 
 		// We should be recording if we're going to resolve mips here.
 		assert(frame.is_recording);
+		if (endPass)
+		{
+			MGVK_EndRenderPass(device, frame.commandBuffer);
+			endPass = false;
+		}
 
         if (renderTarget->info.mipLevels > 1)
         {
@@ -5290,8 +5304,17 @@ void MGG_GraphicsDevice_ResolveRenderTargets(MGG_GraphicsDevice* device)
                 VkPipelineStageFlags srcStage;
                 if (j == 1)
                 {
-                    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                    srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                    if (barrier.oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                    {
+                        barrier.srcAccessMask = 0;
+                        srcStage =	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+                    }
+                    else
+                    {
+                        barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                        srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                    }
                 }
                 else
                 {
@@ -5710,7 +5733,21 @@ MGG_DepthStencilState* MGG_DepthStencilState_Create(MGG_GraphicsDevice* device, 
 	depth.front.compareMask = info->stencilMask;
 	depth.front.writeMask = info->stencilWriteMask;
 	depth.front.reference = info->referenceStencil;
-	depth.back = depth.front;
+	if (info->twoSidedStencilMode)
+	{
+		depth.back.failOp = ToVkStencilOp(info->counterClockwiseStencilFail);
+		depth.back.passOp = ToVkStencilOp(info->counterClockwiseStencilPass);
+		depth.back.depthFailOp = ToVkStencilOp(info->counterClockwiseStencilDepthBufferFail);
+		depth.back.compareOp = ToVkCompareOp(info->counterClockwiseStencilFunction);
+		depth.back.compareMask = info->stencilMask;
+		depth.back.writeMask = info->stencilWriteMask;
+		depth.back.reference = info->referenceStencil;
+	}
+	else
+	{
+		depth.back = depth.front;
+	}
+
 	depth.minDepthBounds = 0.0f;
 	depth.maxDepthBounds = 1.0f;
 

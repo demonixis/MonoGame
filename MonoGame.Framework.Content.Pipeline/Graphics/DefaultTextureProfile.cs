@@ -2,10 +2,8 @@
 // This file is subject to the terms and conditions defined in
 // file 'LICENSE.txt', which is part of this source code package.
 
-using System;
 using Microsoft.Xna.Framework.Content.Pipeline.Processors;
 using Microsoft.Xna.Framework.Graphics;
-
 
 namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
 {
@@ -54,16 +52,13 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
             // Select the default texture compression format for the target platform
             if (format == TextureProcessorOutputFormat.Compressed)
             {
-                if (platform == TargetPlatform.iOS || platform == TargetPlatform.iOSNativeGLES)
-                    format = TextureProcessorOutputFormat.PvrCompressed;
-                else if (platform == TargetPlatform.iOSMetal)
-                    format = TextureProcessorOutputFormat.AstcCompressed;
-                else if (platform == TargetPlatform.Android ||
-                         platform == TargetPlatform.AndroidVK ||
-                         platform == TargetPlatform.AndroidNativeGLES)
-                    format = TextureProcessorOutputFormat.EtcCompressed;
-                else
-                    format = TextureProcessorOutputFormat.DxtCompressed;
+                format = platform switch
+                {
+                    TargetPlatform.iOS or TargetPlatform.iOSNativeGLES => TextureProcessorOutputFormat.PvrCompressed,
+                    TargetPlatform.iOSMetal => TextureProcessorOutputFormat.AstcCompressed,
+                    TargetPlatform.Android or TargetPlatform.AndroidVK or TargetPlatform.AndroidNativeGLES => TextureProcessorOutputFormat.EtcCompressed,
+                    _ => TextureProcessorOutputFormat.DxtCompressed
+                };
             }
 
             if (IsCompressedTextureFormat(format))
@@ -146,16 +141,11 @@ namespace Microsoft.Xna.Framework.Content.Pipeline.Graphics
             }
 
             // Does it require square textures?
-            switch (format)
+            requiresSquare = format switch
             {
-                default:
-                    requiresSquare = false;
-                    break;
-
-                case TextureProcessorOutputFormat.PvrCompressed:
-                    requiresSquare = true;
-                    break;
-            }
+                TextureProcessorOutputFormat.PvrCompressed => true,
+                _ => false
+            };
         }
 
         protected override void PlatformCompressTexture(ContentProcessorContext context, TextureContent content, TextureProcessorOutputFormat format, bool isSpriteFont)
